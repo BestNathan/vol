@@ -33,7 +33,7 @@ Frontend: `ActiveTab` removed `Conversation`/`Sessions` variants. `AgentsPanel` 
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: session.list agent_id, agent status tracking, agent.list enrichment
+- [[vol-llm-agent-protocol-crate]]: session.list agent_id, agent status tracking, agent.list enrichment
 - [[vol-llm-ui-crate]]: agent-centric layout, agents panel rewrite
 
 ## Concepts Covered

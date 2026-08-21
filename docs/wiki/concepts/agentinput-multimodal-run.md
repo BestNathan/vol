@@ -65,5 +65,5 @@ For channel clients, both forms are accepted:
 - [[agentinput-channel-unification]]: channel crate unified to use `AgentInput` directly.
 - [[vol-llm-agent-crate]]: owns `AgentInput`, `InputPart`, and `run_input`.
 - [[vol-llm-provider-crate]]: converts multipart content for Anthropic.
-- [[vol-llm-agent-channel-crate]]: `AgentPayload::Submit`, `AgentRequest`, and `AgentDispatcher` all use `AgentInput` directly — no intermediate string conversion.
+- [[vol-llm-agent-protocol-crate]]: `AgentPayload::Submit`, `AgentRequest`, and `AgentDispatcher` all use `AgentInput` directly — no intermediate string conversion.
 - [[react-pattern]]: execution loop receiving structured user content.

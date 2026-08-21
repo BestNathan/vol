@@ -33,7 +33,7 @@ The legacy React `frontend/` directory was also deleted because it referenced `v
 
 - [[vol-llm-ui-crate]]: active Dioxus/WASM frontend after cleanup.
 - [[vol-agent-server-crate]]: owns the current JSON-RPC backend used by `make web-backend`.
-- [[vol-llm-agent-channel-crate]]: owns the shared JSON-RPC protocol and transport abstractions used by the backend.
+- [[vol-llm-agent-protocol-crate]]: owns the shared JSON-RPC protocol and transport abstractions used by the backend.
 
 ## Concepts Covered
 

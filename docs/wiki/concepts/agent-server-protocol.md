@@ -10,7 +10,7 @@ source_count: 1
 # Agent Server Protocol
 
 **Category:** Protocol architecture
-**Related:** [[vol-llm-agent-channel-crate]], [[connection-trait]], [[http-transport]], [[jsonrpc-transport]], [[agent-channel-server-protocol-transport-migration]]
+**Related:** [[vol-llm-agent-protocol-crate]], [[connection-trait]], [[http-transport]], [[jsonrpc-transport]], [[agent-channel-server-protocol-transport-migration]]
 
 ## Definition
 

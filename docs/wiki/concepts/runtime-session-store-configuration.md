@@ -15,7 +15,7 @@ Runtime session store configuration is the shared `[runtime.session_store]` TOML
 ## How It Works
 Source: [[session-database-store-implementation]]
 
-The configuration is defined in [[vol-llm-runtime-crate]] and parsed by [[vol-agent-server-crate]]. Runtime construction produces one shared `Arc<dyn SessionManager>`, which is then used by registered agents and by JSON-RPC session-domain handlers in [[vol-llm-agent-channel-crate]].
+The configuration is defined in [[vol-llm-runtime-crate]] and parsed by [[vol-agent-server-crate]]. Runtime construction produces one shared `Arc<dyn SessionManager>`, which is then used by registered agents and by JSON-RPC session-domain handlers in [[vol-llm-agent-protocol-crate]].
 
 Supported file-backed shape:
 
@@ -71,6 +71,6 @@ The database store creates session metadata on first entry write, validates agen
 - [[vol-session]]
 - [[vol-llm-runtime-crate]]
 - [[vol-agent-server-crate]]
-- [[vol-llm-agent-channel-crate]]
+- [[vol-llm-agent-protocol-crate]]
 - [[session-as-ssot]]
 - [[runtime-task-store-configuration]]

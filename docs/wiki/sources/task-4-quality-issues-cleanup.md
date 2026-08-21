@@ -32,7 +32,7 @@ Verification covered stale-reference searches, package checks/tests/clippy for `
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: dependency scope cleanup and generic JSON-RPC transport ownership.
+- [[vol-llm-agent-protocol-crate]]: dependency scope cleanup and generic JSON-RPC transport ownership.
 - [[vol-agent-server-crate]]: active backend and configured WebSocket path ownership.
 
 ## Concepts Covered

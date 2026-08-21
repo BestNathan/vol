@@ -49,7 +49,7 @@ Verification commands run:
 ## Entities Mentioned
 
 - [[vol-agent-server-crate]]: owns the new concrete control-plane core and handlers.
-- [[vol-llm-agent-channel-crate]]: provides protocol, `DomainHandler`, `HandlerRegistry`, `Connection`, and `JsonRpcMessageService` abstractions.
+- [[vol-llm-agent-protocol-crate]]: provides protocol, `DomainHandler`, `HandlerRegistry`, `Connection`, and `JsonRpcMessageService` abstractions.
 
 ## Concepts Covered
 

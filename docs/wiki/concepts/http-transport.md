@@ -10,7 +10,7 @@ source_count: 2
 # HTTP Transport
 
 **Category:** Network transport
-**Related:** [[vol-llm-agent-channel-crate]], [[connection-trait]], [[agent-server-protocol]], [[agent-channel-server-protocol-transport-migration]], [[agent-channel-examples]], [[mcp-transport-pattern]]
+**Related:** [[vol-llm-agent-protocol-crate]], [[connection-trait]], [[agent-server-protocol]], [[agent-channel-server-protocol-transport-migration]], [[agent-channel-examples]], [[mcp-transport-pattern]]
 
 ## Definition
 

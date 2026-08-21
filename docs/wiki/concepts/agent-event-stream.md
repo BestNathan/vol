@@ -53,7 +53,7 @@ Events are produced by the Agent Core and consumed by the PluginStream. Each plu
 - [[session-as-ssot]]: Events now carry references instead of message copies
 - [[run-context]]: Context available to plugin intercept/listen hooks
 - [[connection-holder]]: Forwards events to active transport connection
-- [[vol-llm-agent-channel-crate]]: Channel layer consuming the event stream
+- [[vol-llm-agent-protocol-crate]]: Channel layer consuming the event stream
 - [[tui-frontend-ratatui]]: TUI renders events via UiState mutations from EventBuffer
 - [[dioxus-web-pattern]]: Web frontend consumes events via EventBus with UiEventKind routing [[event-bus-pattern]], [[split-signal-state]]
 - [[event-bus-pattern]]: EventBus routes UiEvent variants by coarse-grained UiEventKind

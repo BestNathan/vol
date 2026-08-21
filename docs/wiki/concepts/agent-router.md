@@ -10,7 +10,7 @@ source_count: 3
 # Agent Router
 
 **Category:** Multi-agent routing
-**Related:** [[vol-llm-agent-channel-crate]], [[agent-dispatcher]], [[connection-holder]]
+**Related:** [[vol-llm-agent-protocol-crate]], [[agent-dispatcher]], [[connection-holder]]
 
 ## Definition
 
@@ -57,4 +57,4 @@ In a multi-agent service, each agent needs its own `ConnectionHolder` (for trans
 - [[agent-server-control-data-plane]]: Distributed `ControlRouter` sits above the node-local `AgentRouter`.
 - [[run-id-unification]]: Router cancellation now searches dispatchers by run id.
 - [[agent-dispatcher]]: Per-agent FIFO queue and run id cancellation target.
-- [[vol-llm-agent-channel-crate]]: Crate containing the router implementation.
+- [[vol-llm-agent-protocol-crate]]: Crate containing the router implementation.

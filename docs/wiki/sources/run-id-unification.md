@@ -37,7 +37,7 @@ The agent domain handler preserves a supplied `run_id` from `agent.submit`, othe
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: owns the Agent Server protocol payloads, request model, dispatcher, router, and transport shims updated for run id identity.
+- [[vol-llm-agent-protocol-crate]]: owns the Agent Server protocol payloads, request model, dispatcher, router, and transport shims updated for run id identity.
 - [[vol-llm-agent-crate]]: owns `ReActAgent::run_with_id()` and `RunContext` creation with caller-provided ids.
 
 ## Concepts Covered

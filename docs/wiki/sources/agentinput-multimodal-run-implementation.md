@@ -40,7 +40,7 @@ The channel protocol changed `Submit.input` and `AgentRequest.input` from raw te
 - [[vol-llm-agent-crate]]: owns `AgentInput`, `InputPart`, and `ReActAgent::run_input`.
 - [[vol-llm-core-crate]]: provides provider-neutral multipart message content types.
 - [[vol-llm-provider-crate]]: converts multipart user content to Anthropic request JSON.
-- [[vol-llm-agent-channel-crate]]: carries `AgentInput` through transports and dispatchers.
+- [[vol-llm-agent-protocol-crate]]: carries `AgentInput` through transports and dispatchers.
 - [[vol-llm-tool-crate]]: received a related compile fix for `McpTool` to use `McpManager`.
 
 ## Concepts Covered

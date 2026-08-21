@@ -81,7 +81,7 @@ Final local verification found targeted crate tests passing, while workspace-lev
 ## Entities Mentioned
 - [[vol-session]]: owns `SessionManager`, file manager, and SeaORM database session store.
 - [[vol-llm-runtime-crate]]: constructs shared `session_manager` from `[runtime.session_store]`.
-- [[vol-llm-agent-channel-crate]]: routes registered agent sessions and JSON-RPC session methods through the runtime manager.
+- [[vol-llm-agent-protocol-crate]]: routes registered agent sessions and JSON-RPC session methods through the runtime manager.
 - [[vol-agent-server-crate]]: parses, validates, logs, and forwards session-store config.
 
 ## Concepts Covered

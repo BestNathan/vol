@@ -37,7 +37,7 @@ Key architectural decision: embed `markdown.js` via `include_str!()` + `dioxus::
 
 ## Concepts Covered
 - [[rich-text-conversation]]: the resulting markdown rendering system
-- [[conversation-view]]: scroll mechanism integration point
+- conversation-view: scroll mechanism integration point
 
 ## Notes
 - Playwright CLI tests fail due to localhost access issues; verified via MCP Playwright

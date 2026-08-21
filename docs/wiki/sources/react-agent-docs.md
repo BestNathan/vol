@@ -37,7 +37,7 @@ The system is async-first, thread-safe (Send + Sync), and composable. It support
 - [[vol-session]]: Session message store, SSOT for conversation messages
 - [[tdengine]]: Time-series database queried by agent tools
 - [[dashscope]]: API endpoint used for LLM access in tests
-- [[vol-llm-agent-channel-crate]]: Channel layer with dispatcher, router, and transports
+- [[vol-llm-agent-protocol-crate]]: Channel layer with dispatcher, router, and transports
 
 ## Concepts Covered
 - [[react-pattern]]: The core Reason-Act-Observe cycle that plugins intercept

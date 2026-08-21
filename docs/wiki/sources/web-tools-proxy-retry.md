@@ -65,8 +65,8 @@ New module with:
 ## Entities Mentioned
 
 - [[vol-llm-tool-crate]]: enhanced ProxyConfig, new RetryConfig and retry_async
-- [[vol-llm-tools-builtin]]: updated config types, provider implementations
-- [[vol-llm-yaml-agent-crate]]: register_tool_by_name now uses agent config
+- vol-llm-tools-builtin: updated config types, provider implementations
+- vol-llm-yaml-agent-crate: register_tool_by_name now uses agent config
 
 ## Concepts Covered
 

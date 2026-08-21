@@ -33,7 +33,7 @@ Frontend: `client.submit()` now takes `target: Option<&str>`. `AgentsState` gain
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: AgentServerCore agent_defs, discover_agents, agent.list enrichment
+- [[vol-llm-agent-protocol-crate]]: AgentServerCore agent_defs, discover_agents, agent.list enrichment
 - [[vol-llm-ui-crate]]: Frontend agent selector and submit target param
 
 ## Concepts Covered

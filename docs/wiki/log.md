@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-08-21] ingest | README 重构（agent 六段式）+ 波动率 pipeline 文档
+- Created sources: [[readme-restructure]], [[volatility-pipeline-doc]]
+- Updated entities: [[vol-repository]] (key facts 修正：make→just、React frontend/ 为活跃 Web UI、ArgoCD 为主部署路径、openspec→superpowers；模块结构表补齐 vol-llm-agent-tool/sandbox/fs/cli-tool 等新 crate；source_count 2->4)
+- Updated index: Last updated + vol-repository summary, 2 new source entries
+- Cross-references added: 6
+- Changes: README 从「pipeline+agent 混合」重构为聚焦 agent 系统的六段式布局（agent 系统 / 架构 / 项目结构 / 安装部署 / AI 开发流程 / 工具命令），采用精简总览+wiki 链接风格；架构章节含核心概念、控制面/数据面、工具与 sandbox、agent-subagent 协作、部署架构五个小节。波动率 pipeline 内容移入新建的 docs/architecture/volatility-pipeline.md（架构图、13 个 pipeline crate、运行与部署）。顺带修复过时内容：make 命令→just（无 Makefile）、vol-llm-ui 标注 deprecated、crate 表补充新增 crate、K8s 标注 ArgoCD 优先。所有 README wikilink 已校验存在。
+
 ## [2026-08-20] ingest | AgentTool 内置化实现
 - Created sources: [[agenttool-builtin-impl]]
 - Created entities: [[vol-llm-agent-tool-crate]]
@@ -202,7 +209,7 @@
 ## [2026-06-10] ingest | Task 4 Quality Issues Cleanup
 - Created sources: [[task-4-quality-issues-cleanup]]
 - Updated concepts: [[jsonrpc-transport]] (generic `JsonRpcServer<S>`/`JsonRpcMessageService` path ownership and current `vol_llm_agent_channel::transport::jsonrpc::*` module path)
-- Updated entities: [[vol-llm-agent-channel-crate]] (dependency scope cleanup and moved-router/dispatcher comment cleanup), [[vol-agent-server-crate]] (active backend ownership and `config.control_plane.client_ws_path` default `/ws` startup path)
+- Updated entities: [[vol-llm-agent-protocol-crate]] (dependency scope cleanup and moved-router/dispatcher comment cleanup), [[vol-agent-server-crate]] (active backend ownership and `config.control_plane.client_ws_path` default `/ws` startup path)
 - Updated sources: [[remove-vol-agent-manager]] (active backend claim points to `vol-agent-server` instead of deleted channel example)
 - Updated index: new source entry and refreshed server/JSON-RPC summaries
 - Cross-references added: 7
@@ -211,13 +218,13 @@
 ## [2026-06-10] update | Task 4 Code Quality Cleanup
 - Updated concepts: [[http-transport]] marked historical/deleted from active channel API
 - Updated sources: [[agent-channel-examples]] marked historical/deleted
-- Updated entities: [[vol-llm-agent-channel-crate]] current transport/API notes, dependency cleanup, and configured JSON-RPC path ownership
+- Updated entities: [[vol-llm-agent-protocol-crate]] current transport/API notes, dependency cleanup, and configured JSON-RPC path ownership
 - Updated index: HTTP transport and examples statuses set to stale
 - Changes: Cleaned stale Task 4 wiki references after HTTP transport/examples deletion and channel/data-plane boundary cleanup.
 
 ## [2026-06-10] ingest | Agent Server Data-Plane Core Move
 - Created sources: [[agent-server-data-plane-core-move]]
-- Updated entities: [[vol-agent-server-crate]] (`DataPlaneServerCore`, data-plane module tree, configured standalone WebSocket mounting with `/ws` default, source_count 8->9), [[vol-llm-agent-channel-crate]] (protocol/connection/service/generic transport boundary, concrete module removal, source_count 18->19)
+- Updated entities: [[vol-agent-server-crate]] (`DataPlaneServerCore`, data-plane module tree, configured standalone WebSocket mounting with `/ws` default, source_count 8->9), [[vol-llm-agent-protocol-crate]] (protocol/connection/service/generic transport boundary, concrete module removal, source_count 18->19)
 - Updated concepts: [[agent-server-control-data-plane]] (source_count 5->6, Task 4 implementation status)
 - Updated index: new source entry and refreshed server summary
 - Cross-references added: 18
@@ -234,7 +241,7 @@
 
 ## [2026-06-10] ingest | ControlPayload Flat JSON-RPC Encoding Fix
 - Created sources: [[control-payload-flat-jsonrpc-encoding-fix]]
-- Updated entities: [[vol-llm-agent-channel-crate]] (key fact for `ControlPayload` flat encoding, timeline entry, source_count 17->18)
+- Updated entities: [[vol-llm-agent-protocol-crate]] (key fact for `ControlPayload` flat encoding, timeline entry, source_count 17->18)
 - Updated concepts: [[agent-server-control-data-plane]] (source_count 3->4, new source link, flat JSON-RPC payload rule)
 - Updated index: new source entry for control-payload-flat-jsonrpc-encoding-fix
 - Cross-references added: 5
@@ -242,7 +249,7 @@
 
 ## [2026-06-10] ingest | Agent Server Control/Data Plane Task 1 Implementation
 - Updated sources: [[agent-server-control-data-plane-implementation-plan]] (Task 1 completion status and verification commands)
-- Updated entities: [[vol-llm-agent-channel-crate]] (`JsonRpcMessageService`, generic `JsonRpcServer<S>`, explicit route path, `AgentServerCore::serve_dyn` bridge), [[vol-agent-server-crate]] (startup now passes `/ws` explicitly)
+- Updated entities: [[vol-llm-agent-protocol-crate]] (`JsonRpcMessageService`, generic `JsonRpcServer<S>`, explicit route path, `AgentServerCore::serve_dyn` bridge), [[vol-agent-server-crate]] (startup now passes `/ws` explicitly)
 - Updated index: no new entries; existing summaries already cover generic service abstraction
 - Cross-references added: 6
 - Changes: Documented the completed Task 1 implementation that decouples JSON-RPC transport from concrete `AgentServerCore` while preserving current data-plane behavior and tests.
@@ -250,7 +257,7 @@
 ## [2026-06-10] ingest | Agent Server Control/Data Plane Implementation Plan
 - Created sources: [[agent-server-control-data-plane-implementation-plan]]
 - Updated concepts: [[agent-server-control-data-plane]] (staged implementation sequence for channel service abstraction, control protocol, data-plane core migration, control-plane core, route composition, and boundary tests)
-- Updated entities: [[vol-llm-agent-channel-crate]] (implementation starts with `JsonRpcMessageService` and `control.*` protocol), [[vol-agent-server-crate]] (implementation owns moved data-plane core and new control-plane core), [[vol-llm-runtime-crate]] (source count for runtime capability source role)
+- Updated entities: [[vol-llm-agent-protocol-crate]] (implementation starts with `JsonRpcMessageService` and `control.*` protocol), [[vol-agent-server-crate]] (implementation owns moved data-plane core and new control-plane core), [[vol-llm-runtime-crate]] (source count for runtime capability source role)
 - Updated index: new implementation-plan source entry
 - Cross-references added: 17
 - Changes: Captured the implementation plan for the final agent-server control/data-plane architecture. Feishu/Lark upload updated to revision 18: https://my.feishu.cn/docx/TnKWd2VUeoKHnjxX8FgcIKzEnQ5
@@ -258,7 +265,7 @@
 ## [2026-06-10] ingest | Agent Server Control/Data Plane Addendum
 - Created sources: [[agent-server-control-data-plane-addendum]]
 - Updated concepts: [[agent-server-control-data-plane]] (endpoint role allowlists, command/run semantics, capability revision consistency, node record/session separation, combined-mode lifecycle, runtime capability facade, subscriptions, error code ownership, migration constraints, and boundary tests)
-- Updated entities: [[vol-agent-server-crate]] (addendum-owned implementation details for roles/lifecycle/stores), [[vol-llm-agent-channel-crate]] (error vocabulary and allowlist protocol semantics), [[vol-llm-runtime-crate]] (source count for capability-source reference)
+- Updated entities: [[vol-agent-server-crate]] (addendum-owned implementation details for roles/lifecycle/stores), [[vol-llm-agent-protocol-crate]] (error vocabulary and allowlist protocol semantics), [[vol-llm-runtime-crate]] (source count for capability-source reference)
 - Updated index: new source entry and refreshed concept summary
 - Cross-references added: 22
 - Changes: Captured the brainstormed addendum for implementation-critical details that should guide the future plan. Feishu/Lark upload: https://my.feishu.cn/docx/Rk11ddyFJoC6q2x8HOjcrwuQn4c
@@ -266,7 +273,7 @@
 ## [2026-06-10] ingest | Agent Server Control Plane / Data Plane Architecture
 - Created sources: [[agent-server-control-data-plane-architecture]]
 - Created concepts: [[agent-server-control-data-plane]]
-- Updated entities: [[vol-agent-server-crate]] (final owner of concrete `DataPlaneServerCore`, `ControlPlaneServerCore`, and config-driven role composition), [[vol-llm-agent-channel-crate]] (final owner of protocol definitions, JSON-RPC transport, connection/handler/registry/service abstractions), [[vol-llm-runtime-crate]] (runtime remains data-plane capability source)
+- Updated entities: [[vol-agent-server-crate]] (final owner of concrete `DataPlaneServerCore`, `ControlPlaneServerCore`, and config-driven role composition), [[vol-llm-agent-protocol-crate]] (final owner of protocol definitions, JSON-RPC transport, connection/handler/registry/service abstractions), [[vol-llm-runtime-crate]] (runtime remains data-plane capability source)
 - Updated concepts: [[agent-router]] (clarified node-local router vs distributed `ControlRouter`)
 - Removed obsolete entities: `vol-agent-control-plane` (final design does not add a separate crate)
 - Updated index: source/concept entries and refreshed server/channel summaries
@@ -276,7 +283,7 @@
 ## [2026-06-10] ingest | Session Database Store Implementation
 - Created sources: [[session-database-store-implementation]]
 - Created concepts: [[runtime-session-store-configuration]]
-- Updated entities: [[vol-session]] (SessionManager, DatabaseSessionEntryStore, DatabaseSessionManager, SeaORM sessions/session_entries schema), [[vol-llm-runtime-crate]] (runtime-owned `session_manager` and `[runtime.session_store]` config), [[vol-llm-agent-channel-crate]] (SessionHandler/register_agent use runtime session manager; JSON-RPC error payload preservation), [[vol-agent-server-crate]] (server parses, validates, logs, and forwards session store config)
+- Updated entities: [[vol-session]] (SessionManager, DatabaseSessionEntryStore, DatabaseSessionManager, SeaORM sessions/session_entries schema), [[vol-llm-runtime-crate]] (runtime-owned `session_manager` and `[runtime.session_store]` config), [[vol-llm-agent-protocol-crate]] (SessionHandler/register_agent use runtime session manager; JSON-RPC error payload preservation), [[vol-agent-server-crate]] (server parses, validates, logs, and forwards session store config)
 - Updated concepts: [[session-as-ssot]] (file/database backend selection preserves Session SSOT model)
 - Updated index: new source and concept entries, refreshed session/runtime/server/channel summaries
 - Cross-references added: 28
@@ -324,7 +331,7 @@
 
 ## [2026-06-09] ingest | Task Database Store Implementation
 - Created sources: [[task-database-store-implementation]]
-- Updated entities: [[vol-llm-task-crate]] (DatabaseTaskStore CRUD, ready-task behavior, crate-root export), [[vol-llm-runtime-crate]] (single global runtime task store construction), [[vol-agent-server-crate]] (server config pass-through and startup logging), [[vol-llm-agent-channel-crate]] (builder pass-through and shared TaskHandler store semantics)
+- Updated entities: [[vol-llm-task-crate]] (DatabaseTaskStore CRUD, ready-task behavior, crate-root export), [[vol-llm-runtime-crate]] (single global runtime task store construction), [[vol-agent-server-crate]] (server config pass-through and startup logging), [[vol-llm-agent-protocol-crate]] (builder pass-through and shared TaskHandler store semantics)
 - Updated concepts: [[runtime-task-store-configuration]] (completed file/database runtime behavior and non-goals)
 - Updated index: new end-to-end implementation source entry, refreshed task-store concept and agent-channel summaries
 - Cross-references added: 18
@@ -372,7 +379,7 @@
 
 ## [2026-05-29] ingest | Remove vol-agent-manager and Legacy Frontend
 - Created sources: [[remove-vol-agent-manager]]
-- Updated entities: [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]]
+- Updated entities: [[vol-llm-ui-crate]], [[vol-llm-agent-protocol-crate]]
 - Updated index: new source entry, updated date
 - Cross-references added: 4
 - Changes: Removed obsolete `vol-agent-manager` crate, manager-only Docker/Kubernetes artifacts, and legacy React `frontend/`; the active web backend is now documented as `vol-agent-server` via `make web-backend`, using channel-owned JSON-RPC protocol/transport abstractions.
@@ -393,28 +400,28 @@
 
 ## [2026-05-23] ingest | Agent-Centric UI + Protocol
 - Created sources: [[agent-centric-ui]]
-- Updated entities: [[vol-llm-agent-channel-crate]] (session.list agent_id, agent status tracking)
+- Updated entities: [[vol-llm-agent-protocol-crate]] (session.list agent_id, agent status tracking)
 - Updated index: new source entry, updated date
 - Cross-references added: 1
 - Changes: Tab bar reorganized (Agents first, no Conversation/Sessions tabs). Conversation/Sessions are sub-tabs inside Agents panel scoped to selected agent. Agent cards show status/current task. session.list accepts agent_id filter. agent.list returns status/current_input.
 
 ## [2026-05-23] ingest | Agent Directory Discovery
 - Created sources: [[agent-directory-discovery]]
-- Updated entities: [[vol-llm-agent-channel-crate]] (agent_defs, discover_agents, agent.list metadata)
+- Updated entities: [[vol-llm-agent-protocol-crate]] (agent_defs, discover_agents, agent.list metadata)
 - Updated index: new source entry, updated date
 - Cross-references added: 1
 - Changes: Created 3 agent definition files (general-purpose, explore, review); example uses discover_agents(); agent.list returns type/description/scope; frontend adds agent selector dropdown with target param.
 
 ## [2026-05-22] ingest | Tool Protocol Operations
 - Created sources: [[tool-protocol-operations]]
-- Updated entities: [[vol-llm-agent-channel-crate]] (timeline, source_count)
+- Updated entities: [[vol-llm-agent-protocol-crate]] (timeline, source_count)
 - Updated index: new source entry, updated date
 - Cross-references added: 1
 - Changes: Added ToolOperation/ToolPayload to protocol; created ToolHandler with tool.list/tool.call; frontend client and tools panel updated with system tool listing and direct invocation.
 
 ## [2026-05-22] ingest | JSON-RPC Transport Consolidation
 - Created sources: [[jsonrpc-transport-consolidation]]
-- Updated entities: [[vol-llm-agent-channel-crate]] (module structure, key facts, timeline)
+- Updated entities: [[vol-llm-agent-protocol-crate]] (module structure, key facts, timeline)
 - Updated index: new source entry, updated date
 - Cross-references added: 1
 - Changes: Moved jsonrpc/{server,connection,serde_helpers}.rs and gateway/jsonrpc_ws.rs (as codec.rs) into transport/jsonrpc/; deleted old jsonrpc/ and gateway/ directories; updated internal imports and test paths; no public API breakage.
@@ -422,7 +429,7 @@
 ## [2026-05-22] ingest | AgentInput Channel Unification
 - Created sources: [[agentinput-channel-unification]]
 - Updated concepts: [[agent-dispatcher]] (run_input instead of run_with_id), [[agentinput-multimodal-run]] (channel uses AgentInput directly)
-- Updated entities: [[vol-llm-agent-channel-crate]] (new key facts, timeline entry)
+- Updated entities: [[vol-llm-agent-protocol-crate]] (new key facts, timeline entry)
 - Updated index: new source entry, updated date
 - Cross-references added: 3
 - Changes: Unified AgentPayload::Submit, AgentRequest, and dispatcher to use AgentInput directly. Dropped redundant run_id/metadata fields. Switched dispatcher from run_with_id to run_input.
@@ -430,7 +437,7 @@
 ## [2026-05-21] ingest | AgentInput Multimodal Run Implementation
 - Created sources: [[agentinput-multimodal-run-implementation]]
 - Created concepts: [[agentinput-multimodal-run]]
-- Updated entities: [[vol-llm-agent-crate]] (AgentInput/InputPart, run_input, run_id and metadata support), [[vol-llm-core-crate]] (multipart message content testability), [[vol-llm-provider-crate]] (Anthropic multipart text/image conversion), [[vol-llm-agent-channel-crate]] (legacy string and structured AgentInput compatibility), [[vol-llm-tool-crate]] (McpTool aligned with McpManager)
+- Updated entities: [[vol-llm-agent-crate]] (AgentInput/InputPart, run_input, run_id and metadata support), [[vol-llm-core-crate]] (multipart message content testability), [[vol-llm-provider-crate]] (Anthropic multipart text/image conversion), [[vol-llm-agent-protocol-crate]] (legacy string and structured AgentInput compatibility), [[vol-llm-tool-crate]] (McpTool aligned with McpManager)
 - Updated index: refreshed entity summaries, new concept and source entries
 - Cross-references added: 14
 - Changes: ReActAgent now supports structured multimodal AgentInput while preserving run(&str); first modalities are text and image URL/data URL; Anthropic provider emits native multipart blocks; agent-channel transports deserialize both old string input and new structured input
@@ -509,7 +516,7 @@
 - Created sources: [[docs-rs-mcp-impl]]
 - Created entities: [[vol-mcp-servers-crate]]
 - Created concepts: [[mcp-transport-pattern]], [[docs-rs-tools]], [[rmcp-sdk]]
-- Updated entity: [[vol-llm-agent-channel-crate]]
+- Updated entity: [[vol-llm-agent-protocol-crate]]
 - Cross-references added: 5+
 - Changes: vol-mcp-servers crate created with docs-rs-mcp binary; 4 MCP tools (search_crates, readme, get_item, search_in_crate) ported from TypeScript reference using rmcp 1.6.0; stdio (default) and HTTP/SSE transports via --http flag; StreamableHttpService with LocalSessionManager for session mgmt; HTML parsing via scraper + html2md; both transports verified working
 
@@ -534,14 +541,14 @@
 - Created sources: [[jsonrpc-transport-refactoring]]
 - Created concepts: [[jsonrpc-transport]]
 - Updated concepts: [[jsonrpc-server-handler]] (marked deleted), [[connection-holder]], [[connection-trait]], [[agent-plugin-system]]
-- Updated entities: [[vol-llm-agent-channel-crate]]
+- Updated entities: [[vol-llm-agent-protocol-crate]]
 - Updated index: new entries, updated summaries
 - Cross-references added: 6
 - Changes: EventBridgePlugin deleted, JsonRpcHandler/JsonRpcContext replaced by JsonRpcConnection implementing Connection trait; the historical JsonRpcServer gained registration-list multi-agent support; agent.submit gained optional target param; 49 integration tests; wire format preserved
 
 ## [2026-05-09] ingest | Task 5: JSON-RPC Integration Tests
 - Created sources: [[task-5-jsonrpc-integration-tests]]
-- Updated entities: [[vol-llm-agent-channel-crate]]
+- Updated entities: [[vol-llm-agent-protocol-crate]]
 - Updated concepts: [[json-rpc-websocket]], [[jsonrpc-server-handler]]
 - Cross-references added: 3
 - Changes: 44 integration tests in `tests/jsonrpc_integration.rs` covering all 22 AgentStreamEvent variant serializations, all 13 JSON-RPC request method parsings, event format structure verification, parse-and-respond roundtrip, and 6 error handling tests for malformed input
@@ -555,7 +562,7 @@
 - Created sources: [[task-9-jsonrpc-server]]
 - Created concepts: [[jsonrpc-server-handler]]
 - Updated concepts: [[json-rpc-websocket]], [[connection-holder]], [[agent-dispatcher]], [[remote-agent-connection]]
-- Updated entity: [[vol-llm-agent-channel-crate]]
+- Updated entity: [[vol-llm-agent-protocol-crate]]
 - Cross-references added: 5
 - Changes: jsonrpc module in vol-llm-agent-channel with JsonRpcHandler and JsonRpcContext; 9 JSON-RPC methods (agent.submit/cancel/approve, file.list/read, log.list/read, session.list/resume); JsonRpcContext wraps AgentDispatcher with working_dir and store_dir paths; example binary uses jsonrpsee 0.26 ServerBuilder with RpcModule::from_arc; list and read operations use std::fs; log and session listing scan store_dir/logs/*.jsonl and store_dir/sessions/*.json; stub implementations for log.read and session.resume return empty results; compiles with cargo check -p vol-llm-agent-channel --all-targets; all 16 existing tests pass
 
@@ -585,7 +592,7 @@
 ## [2026-05-07] ingest | Agent Channel WS + HTTP Examples
 - Created sources: [[agent-channel-examples]]
 - Created concepts: [[agent-router]], [[connection-holder-clone-limitation]]
-- Updated entity: [[vol-llm-agent-channel-crate]]
+- Updated entity: [[vol-llm-agent-protocol-crate]]
 - Updated concepts: [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[agent-plugin-system]]
 - Cross-references added: 5
 - Changes: Added single_agent.rs (dual WS+HTTP transport on port 3000) and multi_agent.rs (agent router with 3 agents on port 3001); documented ConnectionHolder Clone limitation; code quality review completed
@@ -611,13 +618,13 @@
 
 ## [2026-05-05] update | HTTP Transport improvements and tests
 - Updated concepts: [[http-transport]], [[connection-trait]], [[connection-holder]]
-- Updated entity: [[vol-llm-agent-channel-crate]]
+- Updated entity: [[vol-llm-agent-protocol-crate]]
 - Changes: SSE stream termination (drop event_tx vs 100ms sleep), holder detach on stream end, 409 for concurrent SSE requests, simplified HttpEventConnection, 5 tests added
 
 ## [2026-05-05] ingest | HTTP Transport Implementation
 - Created sources: [[http-transport-impl]]
 - Created concepts: [[http-transport]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]]
-- Created entity: [[vol-llm-agent-channel-crate]]
+- Created entity: [[vol-llm-agent-protocol-crate]]
 - Cross-references added: 6+
 
 ## [2026-05-04] ingest | Agent Component Documentation (tools, skills, session, context)

@@ -37,8 +37,8 @@ Verification passed with `cargo test -p vol-llm-agent-channel`, `cargo test -p v
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: crate whose transport layer was migrated to Agent Server Protocol.
-- [[vol-agent-manager-crate]]: manager WebSocket handler and integration tests migrated away from legacy `Message`.
+- [[vol-llm-agent-protocol-crate]]: crate whose transport layer was migrated to Agent Server Protocol.
+- [[remove-vol-agent-manager]]: manager WebSocket handler and integration tests migrated away from legacy `Message`.
 
 ## Concepts Covered
 

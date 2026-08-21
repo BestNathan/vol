@@ -58,7 +58,7 @@ Added responsive mobile layout support to the Dioxus web frontend so phone scree
 
 ## Concepts Covered
 - [[dioxus-signal-pattern]]: `file_tree_drawer_open` signal in `WorkspaceState`
-- [[tailwind-css-responsive-pattern]]: Tailwind responsive breakpoint usage
+- tailwind-css-responsive-pattern: Tailwind responsive breakpoint usage
 - [[drawer-ui-pattern]]: slide-out drawer pattern with backdrop overlay
 
 ## Notes

@@ -10,7 +10,7 @@ source_count: 2
 # Connection Holder
 
 **Category:** Plugin lifecycle
-**Related:** [[vol-llm-agent-channel-crate]], [[connection-trait]], [[agent-plugin-system]], [[http-transport]], [[connection-holder-clone-limitation]], [[agent-channel-examples]], [[remote-agent-connection]], [[jsonrpc-transport]], [[jsonrpc-transport-refactoring]]
+**Related:** [[vol-llm-agent-protocol-crate]], [[connection-trait]], [[agent-plugin-system]], [[http-transport]], [[connection-holder-clone-limitation]], [[agent-channel-examples]], [[remote-agent-connection]], [[jsonrpc-transport]], [[jsonrpc-transport-refactoring]]
 
 ## Definition
 

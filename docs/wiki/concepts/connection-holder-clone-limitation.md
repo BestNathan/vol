@@ -10,7 +10,7 @@ source_count: 1
 # ConnectionHolder Clone Limitation
 
 **Category:** Design constraint
-**Related:** [[connection-holder]], [[agent-plugin-system]], [[vol-llm-agent-channel-crate]]
+**Related:** [[connection-holder]], [[agent-plugin-system]], [[vol-llm-agent-protocol-crate]]
 
 ## Problem
 

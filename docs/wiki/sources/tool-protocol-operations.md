@@ -36,7 +36,7 @@ The frontend `JsonRpcClient` gained `tool_list(cb)` and `tool_call(name, args, c
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: new ToolOperation, ToolPayload, ToolHandler
+- [[vol-llm-agent-protocol-crate]]: new ToolOperation, ToolPayload, ToolHandler
 - [[vol-llm-ui-crate]]: updated client and tools panel
 
 ## Concepts Covered

@@ -74,7 +74,7 @@ vol-llm-agent-channel (server)
 
 ## Entities Mentioned
 - [[vol-llm-ui-crate]]: Shared UI state model with dual frontend support
-- [[vol-llm-agent-channel-crate]]: Agent communication layer with JSON-RPC server
+- [[vol-llm-agent-protocol-crate]]: Agent communication layer with JSON-RPC server
 
 ## Concepts Covered
 - [[remote-agent-connection]]: Both LocalConnection and RemoteConnection implementations verified

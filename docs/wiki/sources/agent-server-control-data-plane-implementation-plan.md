@@ -15,12 +15,12 @@ tags: [agent-server, control-plane, data-plane, implementation-plan, json-rpc, m
 
 ## TL;DR
 
-Implementation plan for [[agent-server-control-data-plane-architecture]] and [[agent-server-control-data-plane-addendum]]. It stages the refactor so [[vol-llm-agent-channel-crate]] first gets a generic `JsonRpcMessageService` and `control.*` protocol, then concrete data-plane server behavior moves into [[vol-agent-server-crate]], followed by role config/routes, in-memory control-plane state/handlers, data-plane snapshot/command skeletons, boundary tests, and docs/wiki updates.
+Implementation plan for [[agent-server-control-data-plane-architecture]] and [[agent-server-control-data-plane-addendum]]. It stages the refactor so [[vol-llm-agent-protocol-crate]] first gets a generic `JsonRpcMessageService` and `control.*` protocol, then concrete data-plane server behavior moves into [[vol-agent-server-crate]], followed by role config/routes, in-memory control-plane state/handlers, data-plane snapshot/command skeletons, boundary tests, and docs/wiki updates.
 
 ## Key Takeaways
 
 - Start by making `JsonRpcServer` generic over `JsonRpcMessageService` while current behavior still works.
-- Add `ControlOperation`, `ControlPayload`, node/capability/command models, and `control.*` JSON-RPC mapping in [[vol-llm-agent-channel-crate]].
+- Add `ControlOperation`, `ControlPayload`, node/capability/command models, and `control.*` JSON-RPC mapping in [[vol-llm-agent-protocol-crate]].
 - Add role config and route composition to [[vol-agent-server-crate]].
 - Move current concrete `AgentServerCore`, local router/dispatcher, connection holder, and data-plane handlers from channel to `vol-agent-server::data_plane`.
 - Add in-memory `ControlPlaneServerCore` state: `NodeRegistry`, `CapabilityIndex`, `CommandStore`, `RunStore`, and handlers for `control.register`, heartbeat, snapshot, node list, and capability list.
@@ -40,7 +40,7 @@ Tasks 8-10 add MVP data-plane reporting/command skeletons, control routing, and 
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: first migration target; owns generic JSON-RPC service abstraction and `control.*` protocol.
+- [[vol-llm-agent-protocol-crate]]: first migration target; owns generic JSON-RPC service abstraction and `control.*` protocol.
 - [[vol-agent-server-crate]]: owns moved data-plane core, new control-plane core, role config/routes, and in-memory state.
 - [[vol-llm-runtime-crate]]: remains execution resource owner and capability source.
 

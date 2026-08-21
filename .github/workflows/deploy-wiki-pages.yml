@@ -1,0 +1,75 @@
+name: deploy-wiki-pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/wiki/**'
+      - '.github/pages/**'
+  pull_request:
+    paths:
+      - 'docs/wiki/**'
+      - '.github/pages/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wiki-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Builds the wiki site. Runs on PRs too as a dead-link / build gate
+  # (deploy job is skipped for pull_request events).
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: .github/pages/requirements.txt
+
+      - name: Install mkdocs toolchain
+        run: pip install -r .github/pages/requirements.txt
+
+      # roamlinks resolves [[slug]] by walking all dirs, so a slug that exists
+      # in several dirs is ambiguous (order-dependent). Fail early instead.
+      - name: Check for ambiguous wiki slugs
+        run: |
+          dups=$(find docs/wiki/concepts docs/wiki/entities docs/wiki/sources -name '*.md' -printf '%f\n' | sed 's/\.md$//' | sort | uniq -d)
+          for slug in $dups; do
+            if grep -rq "\[\[$slug\]\]" docs/wiki; then
+              echo "::error::ambiguous slug [[$slug]] matches pages in multiple dirs — rename the source page per the <slug>-design convention"
+              exit 1
+            fi
+          done
+
+      - name: Build wiki site (strict)
+        run: mkdocs build --strict --config-file .github/pages/mkdocs.yml
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .github/pages/site
+
+  # Publishes the built site. Only for pushes to main and manual runs.
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

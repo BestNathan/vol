@@ -55,7 +55,7 @@ pub trait FileOperations: Send + Sync {
 | Type | AgentConnection | FileOperations | Backend |
 |------|-----------------|----------------|---------|
 | `LocalConnection` | In-process `ReActAgent` via `EventObserver` | Direct filesystem | [[vol-llm-agent-crate]] |
-| `RemoteConnection` | JSON-RPC over WebSocket via jsonrpsee | JSON-RPC endpoints (`file.list`, `file.read`, `log.list`, `session.list`) | [[vol-llm-agent-channel-crate]] |
+| `RemoteConnection` | JSON-RPC over WebSocket via jsonrpsee | JSON-RPC endpoints (`file.list`, `file.read`, `log.list`, `session.list`) | [[vol-llm-agent-protocol-crate]] |
 
 ## Supporting Types
 - `FileEntry` — file/directory entry: `name`, `is_dir`, `size`

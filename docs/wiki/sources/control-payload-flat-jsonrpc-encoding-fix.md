@@ -41,7 +41,7 @@ Verification run:
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: owns the protocol payload enums and JSON-RPC codec changed by this fix.
+- [[vol-llm-agent-protocol-crate]]: owns the protocol payload enums and JSON-RPC codec changed by this fix.
 
 ## Concepts Covered
 

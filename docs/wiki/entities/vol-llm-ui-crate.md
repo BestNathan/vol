@@ -11,7 +11,7 @@ source_count: 24
 
 **Category:** Rust crate — Shared UI state model and connection abstraction. **Web feature (Dioxus WASM) is DEPRECATED as of 2026-08-06 — replaced by React frontend at `frontend/`. TUI feature (ratatui) and shared state module remain maintained.**
 
-**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-channel-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]], [[connection-state-dashboard]], [[mcp-state-types]], [[schema-form-pattern]], [[skills-panel-json-rpc]], [[drawer-ui-pattern]], [[file-tree-sidebar-scroll-fix]], [[mobile-file-tree-rail]], [[mobile-ui-refinements]], [[file-tree-single-click-expand-fix]], [[file-tree-collapsed-state-follow-up]], [[file-tree-chevron-glyph-refinement]], [[dependency-graph-visualization]]
+**Related:** [[vol-llm-agent-crate]], [[vol-llm-agent-protocol-crate]], [[connection-trait]], [[ratatui-tui-pattern]], [[ui-event-loop-pattern]], [[dioxus-signal-pattern]], [[dioxus-web-pattern]], [[file-tab-pattern]], [[workspace-tree-pattern]], [[event-bus-pattern]], [[sessions-ui-pattern]], [[tailwind-css-migration]], [[connection-state-dashboard]], [[mcp-state-types]], [[schema-form-pattern]], [[skills-panel-json-rpc]], [[drawer-ui-pattern]], [[file-tree-sidebar-scroll-fix]], [[mobile-file-tree-rail]], [[mobile-ui-refinements]], [[file-tree-single-click-expand-fix]], [[file-tree-collapsed-state-follow-up]], [[file-tree-chevron-glyph-refinement]], [[dependency-graph-visualization]]
 
 ## Overview
 

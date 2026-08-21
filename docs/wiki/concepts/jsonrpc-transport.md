@@ -11,7 +11,7 @@ source_count: 3
 
 **Category:** Generic JSON-RPC transport over the `Connection` and service abstractions
 
-**Related:** [[vol-llm-agent-channel-crate]], [[connection-trait]], [[connection-holder]], [[agent-router]], [[agent-dispatcher]], [[json-rpc-websocket]], [[jsonrpc-transport-refactoring]], [[task-4-quality-issues-cleanup]]
+**Related:** [[vol-llm-agent-protocol-crate]], [[connection-trait]], [[connection-holder]], [[agent-router]], [[agent-dispatcher]], [[json-rpc-websocket]], [[jsonrpc-transport-refactoring]], [[task-4-quality-issues-cleanup]]
 
 ## Definition
 

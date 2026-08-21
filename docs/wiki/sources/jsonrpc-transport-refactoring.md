@@ -62,7 +62,7 @@ ReActAgent
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: The crate being refactored
+- [[vol-llm-agent-protocol-crate]]: The crate being refactored
 
 ## Concepts Covered
 

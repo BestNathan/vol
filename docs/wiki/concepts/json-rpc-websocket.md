@@ -11,7 +11,7 @@ source_count: 4
 
 **Category:** Network protocol
 
-**Related:** [[vol-llm-ui-crate]], [[vol-llm-agent-channel-crate]], [[remote-agent-connection]], [[jsonrpc-server-handler]], [[task-5-jsonrpc-integration-tests]], [[lazy-load-dir-tree]], [[event-bus-pattern]], [[frontend-auto-reconnect]]
+**Related:** [[vol-llm-ui-crate]], [[vol-llm-agent-protocol-crate]], [[remote-agent-connection]], [[jsonrpc-server-handler]], [[task-5-jsonrpc-integration-tests]], [[lazy-load-dir-tree]], [[event-bus-pattern]], [[frontend-auto-reconnect]]
 
 ## Definition
 

@@ -47,7 +47,7 @@ transport/
 
 ## Entities Mentioned
 
-- [[vol-llm-agent-channel-crate]]: jsonrpc and gateway modules consolidated under transport/
+- [[vol-llm-agent-protocol-crate]]: jsonrpc and gateway modules consolidated under transport/
 
 ## Concepts Covered
 

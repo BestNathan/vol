@@ -26,7 +26,7 @@ Design addendum for [[agent-server-control-data-plane-architecture]] that refine
 - `NodeRecord` stores node state; `NodeSession` stores live connection state and generation.
 - Combined mode should initially use loopback JSON-RPC registration to exercise the real node endpoint path.
 - `RuntimeCapabilitySource` should hide runtime internals from reporter code.
-- Protocol/domain error code vocabulary belongs in [[vol-llm-agent-channel-crate]]; server fills contextual detail.
+- Protocol/domain error code vocabulary belongs in [[vol-llm-agent-protocol-crate]]; server fills contextual detail.
 - Moving current `AgentServerCore` out of channel is workspace-internal breaking work and should not be papered over by channel re-exporting server types.
 
 ## Detailed Summary
@@ -44,7 +44,7 @@ The addendum also clarifies combined-mode lifecycle, runtime snapshot facade, ca
 ## Entities Mentioned
 
 - [[vol-agent-server-crate]]: owns concrete data/control cores, lifecycle, stores, and role composition.
-- [[vol-llm-agent-channel-crate]]: owns protocol, JSON-RPC codec, service abstraction, and shared error vocabulary.
+- [[vol-llm-agent-protocol-crate]]: owns protocol, JSON-RPC codec, service abstraction, and shared error vocabulary.
 - [[vol-llm-runtime-crate]]: remains execution resource owner and source of capability snapshots.
 
 ## Concepts Covered

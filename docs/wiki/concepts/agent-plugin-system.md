@@ -65,4 +65,4 @@ Plugin priority levels:
 - [[otel-log-routing]]: LokiPlugin structured OTel logging
 - [[vol-llm-agent-crate]]: Where the plugin system is implemented
 - [[connection-holder]]: Transport bridge plugin forwarding events to active connection
-- [[vol-llm-agent-channel-crate]]: Channel crate implementing ConnectionHolder
+- [[vol-llm-agent-protocol-crate]]: Channel crate implementing ConnectionHolder

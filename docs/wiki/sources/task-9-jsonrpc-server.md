@@ -9,7 +9,7 @@ updated: 2026-05-08
 # Task 9: JSON-RPC Server for vol-llm-agent-channel
 
 **Source Type:** Implementation
-**Related:** [[vol-llm-agent-channel-crate]], [[json-rpc-websocket]], [[agent-dispatcher]], [[remote-agent-connection]]
+**Related:** [[vol-llm-agent-protocol-crate]], [[json-rpc-websocket]], [[agent-dispatcher]], [[remote-agent-connection]]
 
 ## Summary
 

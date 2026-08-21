@@ -10,7 +10,7 @@ source_count: 4
 # vol-llm-agent Crate
 
 **Category:** Rust crate — ReAct Agent orchestration
-**Related:** [[react-pattern]], [[agent-plugin-system]], [[agent-builder-pattern]], [[run-context]], [[skill-system]], [[session-as-ssot]], [[vol-llm-core-crate]], [[vol-llm-tool-crate]], [[vol-llm-agent-channel-crate]], [[vol-llm-mcp-crate]], [[mcp-client-integration]], [[mcp-manager-lifecycle]], [[agentinput-multimodal-run]], [[vol-llm-agent-tool-crate]]
+**Related:** [[react-pattern]], [[agent-plugin-system]], [[agent-builder-pattern]], [[run-context]], [[skill-system]], [[session-as-ssot]], [[vol-llm-core-crate]], [[vol-llm-tool-crate]], [[vol-llm-agent-protocol-crate]], [[vol-llm-mcp-crate]], [[mcp-client-integration]], [[mcp-manager-lifecycle]], [[agentinput-multimodal-run]], [[vol-llm-agent-tool-crate]]
 
 ## Overview
 
