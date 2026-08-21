@@ -54,7 +54,7 @@ branch.
   updated to `vol-llm-observability`
 - [[tool-registry]]: the four TDengine-backed built-in tools (`market_data`,
   `alert_history`, `iv_curve`, `rule_info`) are gone — registry is populated dynamically
-- [[tool-context]]: `alert` field and its core-crate type removed
+- [[tool-context]]: the former `alert` field was removed in the earlier tool-context simplification; this removal deleted the last `vol_core::Alert` type reference
 - [[skill-system]], [[agent-builder-pattern]], [[otel-dependency-upgrade]],
   [[loki-plugin-otel-migration-design]]: removed-crate mentions cleaned up
 

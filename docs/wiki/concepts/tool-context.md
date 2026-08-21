@@ -32,7 +32,7 @@ pub struct ToolContext {
 }
 ```
 
-The context is constructed at tool execution time by the `ToolRegistry.execute()` method. The former `alert` field (and its core-crate type) was removed with the volatility pipeline on 2026-08-21; messages give the tool awareness of conversation state, the sandbox scopes side effects, and `agent_def` carries agent identity.
+The context is constructed at tool execution time by the `ToolRegistry.execute()` method. The former `alert` field was removed in the earlier tool-context simplification; this removal deleted the last `vol_core::Alert` type reference. messages give the tool awareness of conversation state, the sandbox scopes side effects, and `agent_def` carries agent identity.
 
 ## Related Concepts
 - [[tool-trait]]: ToolContext is passed to execute()

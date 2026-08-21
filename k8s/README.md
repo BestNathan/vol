@@ -14,6 +14,8 @@ k8s/
 ## Agent Server
 
 ```bash
+kubectl create namespace deribit  # legacy path prerequisite (namespace.yaml removed 2026-08-21)
+
 # Deploy
 kubectl apply -f k8s/agent-server/configmap.yaml
 kubectl apply -f k8s/agent-server/secret.yaml

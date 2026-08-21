@@ -1,6 +1,6 @@
 # vol-llm Crates
 
-AI Agent capabilities for the volatility monitoring platform, providing LLM integration and ReAct-style tool execution.
+AI Agent capabilities for the vol agent system, providing LLM integration and ReAct-style tool execution.
 
 ## Overview
 

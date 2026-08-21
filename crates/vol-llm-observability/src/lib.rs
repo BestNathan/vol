@@ -1,4 +1,4 @@
-//! vol-observability: Agent observability plugins and OTel initialization.
+//! vol-llm-observability: Agent observability plugins and OTel initialization.
 //!
 //! - `LoggingPlugin` — emits structured JSON agent events to stdout via tracing
 //! - `MetricsPlugin` — records OTel metrics

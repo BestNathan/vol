@@ -51,7 +51,7 @@ Last updated: 2026-08-21 (volatility pipeline removed from main: tdengine entity
 | [[agent-builder-pattern]] | Fluent builder for ReActAgent configuration | stable | 2026-05-04 |
 | [[tool-registry]] | Tool registration and execution framework | stable | 2026-05-04 |
 | [[tool-trait]] | Tool trait, ToolResult, ToolContext types | stable | 2026-05-04 |
-| [[tool-context]] | Tool execution context with alert, messages, metadata | stable | 2026-05-04 |
+| [[tool-context]] | Tool execution context with messages, metadata | stable | 2026-05-04 |
 | [[skill-system]] | Skills as native ReActAgent capability via SkillsConfig | active | 2026-05-04 |
 | [[session-as-ssot]] | Session as single source of truth for messages | active | 2026-05-04 |
 | [[run-context]] | Unified run state management replacing PluginContext, with model field | active | 2026-05-06 |

@@ -149,6 +149,7 @@ kubectl apply -k deploy/kustomize/overlays/control-plane
 kubectl apply -k deploy/kustomize/overlays/data-plane
 
 # Legacy (deprecated — prefer ArgoCD)
+kubectl create namespace deribit  # legacy path prerequisite (namespace.yaml removed 2026-08-21)
 kubectl apply -f k8s/agent-server/deployment.yaml
 ```
 

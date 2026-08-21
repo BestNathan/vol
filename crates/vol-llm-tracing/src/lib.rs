@@ -21,7 +21,7 @@ pub fn new_trace_id() -> String {
 /// Note: The tracing crate does not support reading field values from spans.
 /// This function returns a new trace_id as a fallback.
 /// For proper trace propagation, prefer passing trace_id explicitly through
-/// Alert or TracedEvent wrappers.
+/// TracedEvent wrappers.
 pub fn current_trace_id() -> String {
     // tracing::Span doesn't support reading field values at runtime.
     // Return a new trace_id as fallback.

@@ -4,9 +4,9 @@
 //!
 //! This test simulates a real Code Agent calling the LLM API with proper request/response format.
 //!
-//! Agent-run tests use `StubTool` stand-ins for the deleted TDengine tools
-//! (vol-llm-tdengine removed from the workspace): deterministic `execute`,
-//! no external service. Keeps agent-run tests fast and green everywhere.
+//! Agent-run tests use `StubTool` stand-ins for the deleted TDengine-backed
+//! tools: deterministic `execute`, no external service. Keeps agent-run tests
+//! fast and green everywhere.
 
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
