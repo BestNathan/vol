@@ -115,7 +115,7 @@ declared in `.agents/agents/`:
 - **Legacy `k8s/` tree is deprecated** — prefer ArgoCD.
 - MCP servers run as standalone Deployments + ClusterIP Services. [[mcp-transport-pattern]]
 
-See [docs/deployment/k8s-deployment.md](docs/deployment/k8s-deployment.md) for the full guide.
+See [[docs/wiki/concepts/argocd-app-of-apps-gitops]] for the full guide.
 
 ## 3. Project Structure
 
@@ -195,7 +195,7 @@ kubectl apply -k deploy/kustomize/overlays/data-plane
 ```
 
 Runtime config changes are synced to ConfigMaps with `python3 scripts/sync-configmaps.py`.
-See [docs/deployment/k8s-deployment.md](docs/deployment/k8s-deployment.md).
+See [[docs/wiki/concepts/argocd-app-of-apps-gitops]].
 
 ## 5. AI-Driven Development Workflow
 
@@ -257,8 +257,5 @@ Provider config lives in `.agents/providers/*.toml` and is auto-discovered.
 |------|-------|
 | `CLAUDE.md` | AI agent quick reference (conventions, guardrails, commands) |
 | `docs/CONFIGURATION.md` | Full configuration guide (TOML sections, env vars, K8s) |
-| `docs/architecture/overview.md` | System architecture and data flow |
-| `docs/deployment/docker-build.md` | Docker multi-stage builds, registry push |
-| `docs/deployment/k8s-deployment.md` | K8s deployment, secrets, troubleshooting |
 | `docs/wiki/index.md` | Wiki index — entities, concepts, sources, full search |
 | `docs/superpowers/` | Requirement / architecture / spec / plan documents |
