@@ -49,7 +49,7 @@ React web frontend. The former Deribit volatility monitoring pipeline was remove
 
 ## Timeline
 
-- **2026-08-21**: Volatility pipeline removed from `main` — advice module and 12 pipeline crates deleted (`vol-monitor`, `vol-deribit`, `vol-datasource`, `vol-alert`, `vol-rules`, `vol-notification`, `vol-engine`, `vol-eventbus`, `vol-core`, `vol-config`, `vol-tdengine`, `vol-llm-tdengine`), `vol-tracing`→`vol-llm-tracing` and `vol-observability`→`vol-llm-observability` renamed, pipeline infra/docs deleted; the pipeline lives on the `archive/volatility-pipeline` branch [[pipeline-removal-from-main]]
+- **2026-08-21**: Volatility pipeline removed from `main` — advice module and 12 pipeline crates deleted (crate list in [[pipeline-removal-from-main]]), `vol-tracing`→`vol-llm-tracing` and `vol-observability`→`vol-llm-observability` renamed, pipeline infra/docs deleted; the pipeline lives on the `archive/volatility-pipeline` branch [[pipeline-removal-from-main]]
 - **2026-08-21**: README restructured to an agent-only six-section layout (agent system / architecture / project structure / install & deploy / AI workflow / tools & commands); volatility pipeline mentions removed entirely [[readme-restructure]]
 - **2026-06-16**: Added self-contained ArgoCD App-of-Apps GitOps deployment tree under `deploy/argocd/` plus MCP image build workflow; later refactored into `runtime-config` (namespace + shared .agents ConfigMaps) and `workloads` child Applications [[argocd-gitops-deployment]]
 - **2026-05-19**: `CLAUDE.md` gained a Project Overview section summarizing the main repository directories and their roles [[claude-md-project-overview]]

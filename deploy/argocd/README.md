@@ -13,7 +13,6 @@ Managed here:
 
 Not managed here:
 
-- `vol-monitor`
 - legacy `k8s/` deployment scripts
 - secret encryption or external secret operators
 
@@ -148,15 +147,6 @@ All workloads use images from GHCR (`ghcr.io/bestnathan/*`) and expect the image
 
 ```bash
 kubectl -n vol-agent-system create secret docker-registry ghcr-bestnathan \
-  --docker-server='ghcr.io' \
-  --docker-username='<github-username>' \
-  --docker-password='<github-pat-with-read-packages-scope>'
-```
-
-The same secret is needed in `deribit` for vol-monitor:
-
-```bash
-kubectl -n deribit create secret docker-registry ghcr-bestnathan \
   --docker-server='ghcr.io' \
   --docker-username='<github-username>' \
   --docker-password='<github-pat-with-read-packages-scope>'

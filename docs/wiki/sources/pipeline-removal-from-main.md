@@ -24,13 +24,11 @@ branch.
 
 - **Advice agent removed** (2026-08-21): the `advice/` module in `vol-llm-agents`, its
   integration test, and the coding-deribit WebSocket e2e test were deleted; dead
-  dependencies on `vol-core`/`vol-config`/`vol-notification`/`vol-tdengine`/
-  `vol-llm-tdengine` were stripped from `vol-llm-agents`, `vol-llm-agent`, `vol-session`,
-  and `vol-llm-core`.
-- **12 pipeline crates deleted** from the workspace: `vol-monitor`, `vol-deribit`,
-  `vol-datasource`, `vol-alert`, `vol-rules`, `vol-notification`, `vol-engine`,
-  `vol-eventbus`, `vol-core`, `vol-config`, `vol-tdengine`, `vol-llm-tdengine` — workspace
-  members and `workspace.dependencies` entries removed.
+  pipeline dependencies were stripped from `vol-llm-agents`, `vol-llm-agent`,
+  `vol-session`, and `vol-llm-core`.
+- **12 pipeline crates deleted** from the workspace — workspace members and
+  `workspace.dependencies` entries removed (full crate list retained in the removal
+  plan/spec under `docs/superpowers/plans/specs/2026-08-21-volatility-pipeline-removal*`).
 - **2 crates renamed** to the agent-side namespace: `vol-tracing` → `vol-llm-tracing`
   (TracedEvent is agent-side infrastructure, consumed only by `vol-llm-agent`) and
   `vol-observability` → `vol-llm-observability` (all consumers are agent-side:
@@ -56,7 +54,7 @@ branch.
   updated to `vol-llm-observability`
 - [[tool-registry]]: the four TDengine-backed built-in tools (`market_data`,
   `alert_history`, `iv_curve`, `rule_info`) are gone — registry is populated dynamically
-- [[tool-context]]: `alert` field and its `vol_core` type removed
+- [[tool-context]]: `alert` field and its core-crate type removed
 - [[skill-system]], [[agent-builder-pattern]], [[otel-dependency-upgrade]],
   [[loki-plugin-otel-migration-design]]: removed-crate mentions cleaned up
 

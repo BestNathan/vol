@@ -5,11 +5,11 @@
 - Deleted entities: `tdengine` (pipeline market-data storage, page removed)
 - Renamed entities: vol-observability-crate → [[vol-llm-observability-crate]] (title + in-page refs updated; source_count 2->3)
 - Updated entities: [[vol-repository]] (agent-only main + archive/volatility-pipeline branch, module table without pipeline crates; source_count 3->4), [[vol-llm-agents-crate]] (advice agent removed; source_count 2->3)
-- Updated concepts: [[agent-observability]] (4), [[tool-registry]] (3), [[otel-log-routing]] (3), [[otel-dependency-upgrade]] (2), [[loki-plugin-otel-migration-design]] (2), [[pull-based-metrics]] (2), [[agent-builder-pattern]] (3), [[tool-context]] (2), [[skill-system]] (4) — vol-observability→vol-llm-observability, removed-crate mentions (vol_core/advice/tdengine) cleaned (source_count in parens)
+- Updated concepts: [[agent-observability]] (4), [[tool-registry]] (3), [[otel-log-routing]] (3), [[otel-dependency-upgrade]] (2), [[loki-plugin-otel-migration-design]] (2), [[pull-based-metrics]] (2), [[agent-builder-pattern]] (3), [[tool-context]] (2), [[skill-system]] (4) — vol-observability→vol-llm-observability, removed-crate mentions cleaned (source_count in parens)
 - Updated sources: [[observability-pull-metrics-refactor]], [[otel-029-log-init]], [[otel-agent-log-dir-fix]], [[claude-md-project-overview]], [[agent-tool-design]], [[test-tiering-e2e-completion]], [[docs-rs-mcp-impl]], [[vol-mcp-servers-dockerfile]], [[readme-restructure]], [[ci-workflow-restructure]], [[react-agent-docs]], [[session-ssot-redesign]], [[http-transport-impl]], [[skills-as-react-native]] — crate renames, removed-crate mentions removed, historical notes annotated
 - Updated index: tdengine row removed, vol-observability-crate row renamed, vol-llm-agents-crate/vol-repository summaries updated, pipeline-removal-from-main source row added, header date
 - Cross-references added: 4
-- Changes: The Deribit volatility pipeline was removed from main (2026-08-21): advice module and 12 pipeline crates deleted (vol-monitor, vol-deribit, vol-datasource, vol-alert, vol-rules, vol-notification, vol-engine, vol-eventbus, vol-core, vol-config, vol-tdengine, vol-llm-tdengine), vol-tracing→vol-llm-tracing and vol-observability→vol-llm-observability renamed, pipeline infra/docs stripped; pipeline preserved on the archive/volatility-pipeline branch. Wiki surgery to match: tdengine entity deleted, vol-observability-crate renamed, all entity/concept/source pages updated (agent-domain pages edited, no page deleted wholesale), dead wikilinks repaired (dead-link sweep clean).
+- Changes: The Deribit volatility pipeline was removed from main (2026-08-21): advice module and 12 pipeline crates deleted (crate list in [[pipeline-removal-from-main]]), vol-tracing→vol-llm-tracing and vol-observability→vol-llm-observability renamed, pipeline infra/docs stripped; pipeline preserved on the archive/volatility-pipeline branch. Wiki surgery to match: tdengine entity deleted, vol-observability-crate renamed, all entity/concept/source pages updated (agent-domain pages edited, no page deleted wholesale), dead wikilinks repaired (dead-link sweep clean).
 
 ## [2026-08-21] ingest | README 重构（纯 agent 六段式布局）
 - Created sources: [[readme-restructure]]
@@ -608,7 +608,7 @@
 - Cross-references added: 5
 - Changes: Added single_agent.rs (dual WS+HTTP transport on port 3000) and multi_agent.rs (agent router with 3 agents on port 3001); documented ConnectionHolder Clone limitation; code quality review completed
 
-## [2026-05-06] ingest | OTel 0.29 Migration and Log Initialization in vol-monitor
+## [2026-05-06] ingest | OTel 0.29 Migration and Log Initialization in the pipeline monitor binary
 - Created sources: [[otel-029-log-init]]
 - Updated concepts: [[otel-log-routing]], [[agent-observability]]
 - Cross-references added: 2

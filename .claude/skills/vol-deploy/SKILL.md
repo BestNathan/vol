@@ -28,7 +28,6 @@ Use for any Docker or Kubernetes operation. Symptoms that trigger:
 ```
 dockers/                           GHCR (ghcr.io/bestnathan/*)
   vol-agent-server.Dockerfile  →    vol-agent-server:<sha>
-  vol-monitor.cross.Dockerfile →    vol-monitor:<sha>
 
 deploy/argocd/                     ArgoCD (argocd namespace)
   root.yaml                    →    App-of-Apps root
@@ -46,8 +45,6 @@ deploy/argocd/                     ArgoCD (argocd namespace)
 |---------|-----------|------------|----------------|
 | agent-server (data-plane) | `dockers/vol-agent-server.Dockerfile` | `ROLE=data-plane` | `ghcr.io/bestnathan/agent-server` |
 | agent-server (control-plane) | `dockers/vol-agent-server.Dockerfile` | `ROLE=control-plane` | `ghcr.io/bestnathan/agent-server` |
-| vol-monitor | `dockers/vol-monitor.cross.Dockerfile` | _(none)_ | `ghcr.io/bestnathan/vol-monitor` |
-| vol-monitor (single-arch) | `dockers/vol-monitor.Dockerfile` | _(none)_ | `ghcr.io/bestnathan/vol-monitor` |
 | MCP servers | `dockers/vol-mcp-servers.Dockerfile` | _(none)_ | `ghcr.io/bestnathan/<mcp-name>` |
 
 The `vol-agent-server.alpine.Dockerfile` and `vol-llm-ui.Dockerfile` exist but are not the primary deployment paths.
@@ -72,11 +69,6 @@ docker build --build-arg ROLE=data-plane \
 docker build --build-arg ROLE=data-plane --build-arg REGION=global \
   -t ghcr.io/bestnathan/agent-server:<tag> \
   -f dockers/vol-agent-server.Dockerfile .
-
-# vol-monitor (multi-arch, single image):
-docker build \
-  -t ghcr.io/bestnathan/vol-monitor:<tag> \
-  -f dockers/vol-monitor.cross.Dockerfile .
 
 # MCP server:
 docker build \
@@ -164,12 +156,6 @@ kubectl -n vol-agent-system create secret docker-registry ghcr-bestnathan \
   --docker-server='ghcr.io' \
   --docker-username='<github-username>' \
   --docker-password='<github-pat-with-read-packages-scope>'
-
-# Same secret for vol-monitor namespace
-kubectl -n deribit create secret docker-registry ghcr-bestnathan \
-  --docker-server='ghcr.io' \
-  --docker-username='<github-username>' \
-  --docker-password='<github-pat-with-read-packages-scope>'
 ```
 
 ## Post-Deploy Verification
@@ -215,7 +201,6 @@ kubectl -n vol-agent-system describe pod <pod-name>
 |------|---------|
 | Build agent-server (CN) | `docker build --build-arg ROLE=data-plane -t ghcr.io/bestnathan/agent-server:<tag> -f dockers/vol-agent-server.Dockerfile .` |
 | Build agent-server (CI) | `docker build --build-arg ROLE=data-plane --build-arg REGION=global -t ghcr.io/bestnathan/agent-server:<tag> -f dockers/vol-agent-server.Dockerfile .` |
-| Build vol-monitor | `docker build -t ghcr.io/bestnathan/vol-monitor:<tag> -f dockers/vol-monitor.cross.Dockerfile .` |
 | Login to GHCR | `echo "$GITHUB_TOKEN" \| docker login ghcr.io -u <user> --password-stdin` |
 | Push image | `docker push ghcr.io/bestnathan/<image>:<tag>` |
 | Bootstrap ArgoCD | `kubectl apply -f deploy/argocd/root.yaml` |

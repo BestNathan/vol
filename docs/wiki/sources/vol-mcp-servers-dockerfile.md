@@ -54,8 +54,8 @@ CMD ["--http", "0.0.0.0:8080"]
 
 Images are built and pushed to GHCR by the `build-mcp-images.yml` workflow as
 `ghcr.io/bestnathan/<service>:<git-sha>` (e.g. `ghcr.io/bestnathan/docs-rs-mcp:46eea58`).
-The earlier ACR path `.../n_common/vol-monitor:<binary-name>` is superseded — `vol-monitor`
-was removed with the volatility pipeline on 2026-08-21.
+The earlier ACR path `.../n_common/<pipeline-monitor>:<binary-name>` is superseded — the
+pipeline monitor binary was removed with the volatility pipeline on 2026-08-21.
 
 ## Files
 

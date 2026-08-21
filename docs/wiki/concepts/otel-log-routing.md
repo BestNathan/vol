@@ -57,7 +57,7 @@ tracing::info!(...) ─────┐
 
 ## Initialization Flow
 
-1. `vol-llm-observability` `otel_init.rs` initializes the tracing subscriber stack (moved from the removed `vol-monitor` binary; renamed crate 2026-08-21).
+1. `vol-llm-observability` `otel_init.rs` initializes the tracing subscriber stack (moved from the removed pipeline monitor binary; renamed crate 2026-08-21).
 2. `init_otel_logs()` creates `LogExporter` via `LogExporter::builder().with_tonic()` (OTel 0.29 API).
 3. `SdkLoggerProvider` is configured with resource attributes and `BatchLogProcessor`.
 4. `OpenTelemetryTracingBridge<SdkLoggerProvider, SdkLogger>` is created and integrated into the `tracing_subscriber` Registry.

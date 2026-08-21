@@ -93,9 +93,10 @@ docker build --build-arg BIN_NAME=docs-rs-mcp \
   -t docs-rs-mcp:docs-rs-mcp -f crates/vol-mcp-servers/Dockerfile .
 ```
 
-(The `vol-monitor:docs-rs-mcp` tag used at the time was replaced by the
-`build-mcp-images.yml` workflow pushing `ghcr.io/bestnathan/docs-rs-mcp:<sha>`; the
-`vol-monitor` binary was removed with the volatility pipeline on 2026-08-21.)
+(The `docs-rs-mcp` tag on the pipeline monitor binary's image used at the time was
+replaced by the `build-mcp-images.yml` workflow pushing
+`ghcr.io/bestnathan/docs-rs-mcp:<sha>`; that binary was removed with the volatility
+pipeline on 2026-08-21.)
 
 - Base: `ubuntu:24.04` (glibc compatible with host-compiled binary)
 - Single-stage build (multi-stage Alpine blocked by network restrictions in build environment)
