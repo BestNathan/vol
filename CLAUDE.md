@@ -31,7 +31,6 @@ scripts/                  # Build / deploy helpers
 ## Conventions
 
 - **Task done → `wiki-ingest`**: always ingest implementation results to `docs/wiki`.
-- **`docs/superpowers/*` → Lark**: upload new/updated superpowers docs to the corresponding Lark wiki node.
 - **Coverage ≥ 80%**: `just cover-gate <crate> 80` before claiming done. Exception: `main.rs`, `app.rs`, `health.rs`.
 - **Every new `pub fn` / handler → at least one test**.
 - **No doc tests**: write `#[cfg(test)]` unit tests or `tests/` integration tests instead. Doc comment code examples must use ` ```text` (not ` ```rust`). Check with `./scripts/check-no-doc-tests.sh`.
@@ -118,25 +117,6 @@ The frontend uses **shadcn/ui** (Radix base) with Tailwind CSS v4. All UI primit
 ```bash
 docker build -f dockers/vol-agent-server.Dockerfile -t vol-agent-server .
 ```
-
-### Lark Docs
-
-```bash
-# Upload
-lark-cli docs +create --api-version v2 --doc-format markdown \
-  --content @path/to/doc.md --wiki-node "<node-id>" --as user
-
-# Update
-lark-cli docs +update --api-version v2 --doc "<url-or-token>" \
-  --command overwrite --doc-format markdown \
-  --content @path/to/doc.md --as user
-```
-
-| Superpowers dir | Lark node id |
-|---|---|
-| `docs/superpowers/plans/*` | `TEkkw1W6niuBxQkcvswchOo5nhb` |
-| `docs/superpowers/requirement/*` | `PPDZw7LFqiFjMTkAXFocFoO6nce` |
-| `docs/superpowers/specs/*` | `Og7twpiPoi0Vbjk2EzvcqX92nsb` |
 
 ### K8s
 

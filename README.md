@@ -223,8 +223,7 @@ writing-architecture ──► writing-plans ──► subagent-driven-developme
 3. `./scripts/check-agent-boundaries.sh` — dependency direction
 4. `just fmt-check && just clippy-strict` — formatting & lint
 5. `wiki-ingest` — ingest changes into `docs/wiki`
-6. Upload changed `docs/superpowers/*` to Lark
-7. (If UI affected) `just fe-test` + `just fe-e2e` — frontend test tiers
+6. (If UI affected) `just fe-test` + `just fe-e2e` — frontend test tiers
 
 ## 6. Core Tools & Commands
 
