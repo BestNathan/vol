@@ -6,60 +6,11 @@ import { conversationByAgentAtom } from '@/stores/conversation'
 import { isRunningAtom } from '@/stores/connection'
 import { Markdown } from '@/components/shared/Markdown'
 import { ImageGallery } from '@/components/shared/ImageGallery'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { ThinkingBlock } from '@/components/shared/ThinkingBlock'
+import { ToolCallDetailDialog } from '@/components/shared/ToolCallDetailDialog'
 import { useAutoScroll } from '@/hooks/useAutoScroll'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { ConversationEntry } from '@/types'
-
-function ToolDetailModal({
-  entry,
-  open,
-  onClose,
-}: {
-  entry: {
-    toolCall: ConversationEntry & { type: 'ToolCall' }
-    result?: ConversationEntry & { type: 'ToolResult' }
-  }
-  open: boolean
-  onClose: () => void
-}) {
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) onClose()
-      }}
-    >
-      <DialogContent
-        overlayClassName="bg-black/50"
-        className="w-[95vw] sm:max-w-2xl max-h-[80vh] overflow-y-auto rounded-lg"
-      >
-        <DialogTitle className="text-lg font-bold mb-2">
-          Tool: {entry.toolCall.toolName}
-        </DialogTitle>
-        <div className="mb-4">
-          <div className="text-xs text-muted-foreground mb-1">Arguments</div>
-          <pre className="bg-background p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap">
-            {entry.toolCall.fullArguments}
-          </pre>
-        </div>
-        {entry.result && (
-          <div>
-            <div className="text-xs text-muted-foreground mb-1">
-              Result{' '}
-              {entry.result.success ? (
-                <span className="text-emerald-400">OK</span>
-              ) : (
-                <span className="text-destructive">ERR</span>
-              )}
-            </div>
-            <Markdown content={entry.result.fullResult} />
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 function TimelineEntry({
   entry,
@@ -80,13 +31,31 @@ function TimelineEntry({
       ? (() => {
           const resultEntry = entries
             .slice(index + 1)
-            .find((e) => e.type === 'ToolResult' && e.toolName === entry.toolName)
+            .find((e) => e.type === 'ToolResult' && e.toolName === entry.toolName) as
+            (ConversationEntry & { type: 'ToolResult' }) | undefined
           return {
-            toolCall: entry,
-            result: resultEntry as (ConversationEntry & { type: 'ToolResult' }) | undefined,
+            toolName: entry.toolName,
+            fullArguments: entry.fullArguments,
+            result: resultEntry
+              ? { success: resultEntry.success, fullResult: resultEntry.fullResult }
+              : undefined,
           }
         })()
-      : null
+      : entry.type === 'ToolResult'
+        ? (() => {
+            // For ToolResult entries, find the matching ToolCall before it
+            const callEntry = entries
+              .slice(0, index)
+              .reverse()
+              .find((e) => e.type === 'ToolCall' && e.toolName === entry.toolName) as
+              (ConversationEntry & { type: 'ToolCall' }) | undefined
+            return {
+              toolName: entry.toolName,
+              fullArguments: callEntry?.fullArguments ?? '',
+              result: { success: entry.success, fullResult: entry.fullResult },
+            }
+          })()
+        : null
 
   const dotColor =
     entry.type === 'UserInput' ? '#80a0ff' : entry.type === 'Error' ? '#c04040' : '#888'
@@ -114,11 +83,7 @@ function TimelineEntry({
             {entry.images && entry.images.length > 0 && <ImageGallery images={entry.images} />}
           </div>
         )}
-        {entry.type === 'Thinking' && (
-          <div className="text-muted-foreground italic text-sm">
-            {entry.content || 'Thinking...'}
-          </div>
-        )}
+        {entry.type === 'Thinking' && <ThinkingBlock content={entry.content} />}
         {entry.type === 'ContentStreaming' && <Markdown content={entry.content} />}
         {entry.type === 'ToolCall' && (
           <div
@@ -166,13 +131,14 @@ function TimelineEntry({
         )}
       </div>
 
-      {/* Tool detail modal — always mounted while a tool call exists; Radix
-          animates open/close via the detailOpen state. */}
+      {/* Tool detail dialog — mounted when a tool call/result exists */}
       {toolDetail && (
-        <ToolDetailModal
-          entry={toolDetail}
+        <ToolCallDetailDialog
           open={detailOpen}
           onClose={() => setDetailOpen(false)}
+          toolName={toolDetail.toolName}
+          fullArguments={toolDetail.fullArguments}
+          result={toolDetail.result}
         />
       )}
     </div>

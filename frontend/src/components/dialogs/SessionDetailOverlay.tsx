@@ -9,6 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { getPanelClient } from '@/lib/panel-client'
 import { sessionEntriesToConversation } from '@/lib/session-conversion'
 import { ImageGallery } from '@/components/shared/ImageGallery'
+import { Markdown } from '@/components/shared/Markdown'
+import { ThinkingBlock } from '@/components/shared/ThinkingBlock'
+import { ToolCallDetailDialog } from '@/components/shared/ToolCallDetailDialog'
 import type { RpcMethods } from '@/lib/protocol'
 import type { ConversationEntry, SessionListEntry } from '@/types'
 
@@ -22,47 +25,113 @@ function truncateLines(s: string, maxLines: number, maxChars: number): string {
 }
 
 /** Single timeline entry, styled like the Dioxus overlay's per-type cards. */
-function EntryView({ entry }: { entry: ConversationEntry }) {
+function EntryView({
+  entry,
+  index,
+  entries,
+}: {
+  entry: ConversationEntry
+  index: number
+  entries: ConversationEntry[]
+}) {
+  const [detailOpen, setDetailOpen] = useState(false)
+
+  // Find matching ToolResult/ToolCall for dialog
+  const toolDetail =
+    entry.type === 'ToolCall'
+      ? (() => {
+          const resultEntry = entries
+            .slice(index + 1)
+            .find((e) => e.type === 'ToolResult' && e.toolName === entry.toolName) as
+            (ConversationEntry & { type: 'ToolResult' }) | undefined
+          return {
+            toolName: entry.toolName,
+            fullArguments: entry.fullArguments,
+            result: resultEntry
+              ? { success: resultEntry.success, fullResult: resultEntry.fullResult }
+              : undefined,
+          }
+        })()
+      : entry.type === 'ToolResult'
+        ? (() => {
+            const callEntry = entries
+              .slice(0, index)
+              .reverse()
+              .find((e) => e.type === 'ToolCall' && e.toolName === entry.toolName) as
+              (ConversationEntry & { type: 'ToolCall' }) | undefined
+            return {
+              toolName: entry.toolName,
+              fullArguments: callEntry?.fullArguments ?? '',
+              result: { success: entry.success, fullResult: entry.fullResult },
+            }
+          })()
+        : null
+
   switch (entry.type) {
     case 'UserInput':
       return (
-        <div className="mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-[#1a2a44] border-l-[3px] border-[#4080ff]">
+        <div className="mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words bg-[#1a2a44] border-l-[3px] border-[#4080ff]">
           <div className="text-[#4080ff] font-bold">&gt;&gt;&gt; </div>
-          {entry.text}
+          <Markdown content={entry.text} />
           {entry.images && entry.images.length > 0 && <ImageGallery images={entry.images} />}
         </div>
       )
     case 'Thinking':
       return (
-        <div className="mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-muted-foreground italic text-[12px] leading-[1.5]">
-          {entry.content}
+        <div className="mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words">
+          <ThinkingBlock content={entry.content} />
         </div>
       )
     case 'ToolCall':
       return (
-        <div className="mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-foreground text-[13px]">
-          <span className="text-yellow-400 font-bold">[tool]</span>{' '}
-          <span className="font-semibold">{entry.toolName}</span>{' '}
-          <span className="text-muted-foreground">{entry.argPreview}</span>
-        </div>
+        <>
+          <div
+            className="mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words bg-[#2a2a20] border-l-[3px] border-yellow-500/50 cursor-pointer hover:bg-[#3a3a30] transition-colors"
+            onClick={() => setDetailOpen(true)}
+          >
+            <span className="text-yellow-400 font-bold">[tool]</span>{' '}
+            <span className="font-semibold text-foreground">{entry.toolName}</span>{' '}
+            <span className="text-muted-foreground text-[12px]">{entry.argPreview}</span>
+          </div>
+          {toolDetail && (
+            <ToolCallDetailDialog
+              open={detailOpen}
+              onClose={() => setDetailOpen(false)}
+              toolName={toolDetail.toolName}
+              fullArguments={toolDetail.fullArguments}
+              result={toolDetail.result}
+            />
+          )}
+        </>
       )
     case 'ToolResult': {
       const cls = entry.success
-        ? 'mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-emerald-950/30 border-l-[3px] border-emerald-500/50'
-        : 'mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap bg-red-950/30 border-l-[3px] border-destructive/50'
+        ? 'mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words bg-emerald-950/30 border-l-[3px] border-emerald-500/50 cursor-pointer hover:bg-emerald-950/50 transition-colors'
+        : 'mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words bg-red-950/30 border-l-[3px] border-destructive/50 cursor-pointer hover:bg-red-950/50 transition-colors'
       const color = entry.success ? '#40c040' : '#c04040'
       return (
-        <div className={cls}>
-          <div>
-            <span className="font-bold" style={{ color }}>
-              [{entry.success ? 'OK' : 'ERR'}]{' '}
-            </span>
-            <span style={{ color, fontWeight: 'bold' }}>{entry.toolName}</span>
+        <>
+          <div className={cls} onClick={() => setDetailOpen(true)}>
+            <div>
+              <span className="font-bold" style={{ color }}>
+                [{entry.success ? 'OK' : 'ERR'}]{' '}
+              </span>
+              <span style={{ color, fontWeight: 'bold' }}>{entry.toolName}</span>
+            </div>
+            <div className="text-muted-foreground text-[12px] mt-1 pl-1 max-h-[120px] overflow-y-auto font-mono">
+              {truncateLines(entry.preview, 6, 90)}
+            </div>
           </div>
-          <div className="text-muted-foreground text-[12px] mt-1 pl-1 max-h-[120px] overflow-y-auto font-mono">
-            {truncateLines(entry.preview, 6, 90)}
-          </div>
-        </div>
+          {toolDetail && (
+            <ToolCallDetailDialog
+              open={detailOpen}
+              onClose={() => setDetailOpen(false)}
+              toolName={toolDetail.toolName}
+              fullArguments={toolDetail.fullArguments}
+              result={toolDetail.result}
+            />
+          )}
+        </>
       )
     }
     case 'EntryCheckpoint': {
@@ -91,8 +160,8 @@ function EntryView({ entry }: { entry: ConversationEntry }) {
       )
     case 'AgentAnswer':
       return (
-        <div className="mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words whitespace-pre-wrap text-foreground leading-[1.5]">
-          {entry.text}
+        <div className="mb-2.5 px-2.5 py-2 rounded-md max-w-full break-words leading-[1.5]">
+          <Markdown content={entry.text} />
         </div>
       )
     default:
@@ -188,7 +257,7 @@ export function SessionDetailOverlay({
         ) : (
           <div className="flex-1 overflow-y-auto p-2">
             {entries.map((entry, i) => (
-              <EntryView key={i} entry={entry} />
+              <EntryView key={i} entry={entry} index={i} entries={entries} />
             ))}
           </div>
         )}
