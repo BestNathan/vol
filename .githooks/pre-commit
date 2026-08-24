@@ -14,6 +14,9 @@ if [ -z "$CHANGES" ]; then
   exit 0
 fi
 
+# ── Plaintext-secret check (cross-cutting — runs before language gate) ─
+"$SCRIPT_DIR/scripts/check-no-plaintext-secrets.sh" || exit 1
+
 eval "$(echo "$CHANGES" | "$SCRIPT_DIR/scripts/detect-changes.sh")"
 
 if [ "$NO_CHANGES" = "true" ]; then
