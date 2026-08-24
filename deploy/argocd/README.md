@@ -74,17 +74,21 @@ The root App-of-Apps syncs two child applications:
 
 The `runtime-config` application owns:
 
-| Resource | Description |
+| Path | Contents |
 |---|---|
-| `namespace.yaml` | `vol-agent-system` namespace |
-| `agents-configmap.yaml` | Agent definitions from `.agents/agents/*.md` |
-| `providers-configmap.yaml` | Provider definitions from `.agents/providers/*.toml` |
-| `skills-configmap.yaml` | Skill definitions from `.agents/skills/<skill>/SKILL.md` |
-| `sandboxes-configmap.yaml` | Sandbox definitions from `.agents/sandboxes/*.toml` |
-| `mcp-configmap.yaml` | MCP server configuration from `.mcp.json` |
-| `provider-secrets.example.yaml` | Example secret for provider keys (excluded from sync) |
+| `base/namespace.yaml` | `vol-agent-system` namespace |
+| `base/ghcr-image-pull-secret.yaml` | SealedSecret for GHCR image pulls |
+| `base/ansible-ssh-key-sealed.yaml` | SealedSecret for SSH identity |
+| `agents/agent-def-{name}.yaml` | One ConfigMap per agent definition |
+| `sandboxes/sandbox-{name}.yaml` | One ConfigMap per sandbox definition |
+| `providers/provider-{name}.yaml` | One ConfigMap per provider definition |
+| `cli-tools/cli-tool-{name}.yaml` | One ConfigMap per CLI tool definition |
+| `skills/skill-{name}.yaml` | One ConfigMap per skill definition |
+| `mcp/mcp-configmap.yaml` | MCP server configuration from `.mcp.json` |
+| `mcp/agent-dingtalk-secrets.example.yaml` | Example DingTalk MCP secret |
+| `secrets/provider-secrets.example.yaml` | Example provider API key secret |
 
-These ConfigMaps are **auto-generated** by `.github/workflows/sync-runtime-config.yml`. Any push to main that modifies source files under `.agents/` or `.mcp.json` triggers the workflow to regenerate the ConfigMap manifests, which ArgoCD then syncs.
+These ConfigMaps are **auto-generated** by `.github/workflows/sync-runtime-config.yml`. Any push to main that modifies source files under `.agents/` or `.mcp.json` triggers the workflow to regenerate the per-entity ConfigMap manifests, which ArgoCD then syncs.
 
 ### workloads
 
@@ -97,27 +101,32 @@ The `workloads` application owns:
 
 ## Runtime Config Mounts
 
-The `agent-server` deployment mounts shared runtime configuration into `/app/.agents`:
+The `agent-server` deployment mounts per-entity ConfigMaps via projected volumes into `/app/.agents`:
 
-- `agent-definitions` → `/app/.agents/agents` (auto-mounts all `*.md` keys)
-- `agent-providers` → `/app/.agents/providers` (auto-mounts all `*.toml` keys)
-- `agent-skills` → `/app/.agents/skills` (explicit path mapping for subdirectory structure)
-- `agent-sandboxes` → `/app/.agents/sandboxes` (auto-mounts all `*.toml` keys)
-- `mcp-config` → `/app/.mcp.json` (subPath mount from `.mcp.json`)
+- `agent-definitions` (projected from `agent-def-*`) → `/app/.agents/agents` (all agent `.md` files)
+- `agent-providers` (projected from `provider-*`) → `/app/.agents/providers` (all provider `.toml` files)
+- `agent-skills` (projected from `skill-*` with `items[].path`) → `/app/.agents/skills/{name}/SKILL.md`
+- `agent-sandboxes` (projected from `sandbox-*`) → `/app/.agents/sandboxes` (all sandbox `.toml` files)
+- `mcp-config` → `/app/.mcp.json` (subPath mount from `mcp.json`)
 
-This keeps runtime configuration centralized and shared across workloads. New agents, providers, skills, or sandboxes added to the source directories are automatically reflected in the ConfigMaps via the sync workflow.
+This keeps runtime configuration centralized and shared across workloads. New agents, providers, skills, or sandboxes added to the source directories are automatically reflected in the per-entity ConfigMaps via the sync workflow.
 
 ## ConfigMap Sync Workflow
 
-`.github/workflows/sync-runtime-config.yml` auto-generates the ConfigMap manifests when source files change on main:
+`.github/workflows/sync-runtime-config.yml` auto-generates the per-entity ConfigMap manifests when source files change on main:
 
-| Source | ConfigMap |
-|--------|-----------|
-| `.agents/agents/*.md` | `agents-configmap.yaml` |
-| `.agents/providers/*.toml` | `providers-configmap.yaml` |
-| `.agents/skills/*/SKILL.md` | `skills-configmap.yaml` |
-| `.agents/sandboxes/*.toml` | `sandboxes-configmap.yaml` |
-| `.mcp.json` | `mcp-configmap.yaml` |
+| Source | Generated ConfigMap(s) |
+|--------|------------------------|
+| `.agents/agents/{name}.md` | `agents/agent-def-{name}.yaml` |
+| `.agents/providers/{name}.toml` | `providers/provider-{name}.yaml` |
+| `.agents/skills/{name}/SKILL.md` | `skills/skill-{name}.yaml` |
+| `.agents/sandboxes/{name}.toml` | `sandboxes/sandbox-{name}.yaml` |
+| `.agents/cli-tools/{name}.toml` | `cli-tools/cli-tool-{name}.yaml` |
+| `.mcp.json` | `mcp/mcp-configmap.yaml` |
+
+The workflow also writes `.summary.json` listing all generated ConfigMap names per category.
+
+**Adding a new agent/tool/sandbox/etc.:** After committing the source file, the CI syncs the new per-entity ConfigMap. Update the projected-volume `sources` list in the relevant workload deployment(s) to include the new ConfigMap name.
 
 ## Secrets
 

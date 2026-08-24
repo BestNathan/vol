@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sandbox-local-for-cli
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: sandbox-local-for-cli
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: runtime-config
+data:
+  local-for-cli.toml: 'name = "local-for-cli"
+
+    type = "local"
+
+    work_dir = "/tmp"
+
+    '

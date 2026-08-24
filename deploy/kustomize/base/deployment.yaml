@@ -116,20 +116,36 @@ spec:
                 path: agent-server.toml
             defaultMode: 0644
         - name: agent-definitions
-          configMap:
-            name: agent-definitions
+          projected:
+            sources:
+              - configMap: { name: agent-def-ansible }
+              - configMap: { name: agent-def-dingtalk }
+              - configMap: { name: agent-def-explore }
+              - configMap: { name: agent-def-general-purpose }
+              - configMap: { name: agent-def-review }
+              - configMap: { name: agent-def-ssh-test }
+              - configMap: { name: agent-def-task-cli-test }
             defaultMode: 0644
         - name: agent-providers
-          configMap:
-            name: agent-providers
+          projected:
+            sources:
+              - configMap: { name: provider-anthropic-dashscope }
             defaultMode: 0644
         - name: agent-skills
-          configMap:
-            name: agent-skills
+          projected:
+            sources:
+              - configMap:
+                  name: skill-clarifying-requirements
+                  items:
+                    - key: SKILL.md
+                      path: clarifying-requirements/SKILL.md
             defaultMode: 0644
         - name: agent-sandboxes
-          configMap:
-            name: agent-sandboxes
+          projected:
+            sources:
+              - configMap: { name: sandbox-ansible-prod }
+              - configMap: { name: sandbox-local-for-cli }
+              - configMap: { name: sandbox-ssh-dev }
             defaultMode: 0644
         - name: mcp-config
           configMap:

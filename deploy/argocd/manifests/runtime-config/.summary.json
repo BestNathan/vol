@@ -1,0 +1,29 @@
+{
+  "agents": [
+    "agent-def-ansible",
+    "agent-def-dingtalk",
+    "agent-def-explore",
+    "agent-def-general-purpose",
+    "agent-def-review",
+    "agent-def-ssh-test",
+    "agent-def-task-cli-test"
+  ],
+  "sandboxes": [
+    "sandbox-ansible-prod",
+    "sandbox-local-for-cli",
+    "sandbox-ssh-dev"
+  ],
+  "providers": [
+    "provider-anthropic-dashscope"
+  ],
+  "cli_tools": [
+    "cli-tool-ansible",
+    "cli-tool-echo-tool"
+  ],
+  "skills": [
+    "skill-clarifying-requirements"
+  ],
+  "mcp": [
+    "mcp-config"
+  ]
+}

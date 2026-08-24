@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-def-ssh-test
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-def-ssh-test
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: runtime-config
+data:
+  ssh-test.md: "---\nname: ssh-test\ntype: general-purpose\ndescription: Test agent,\
+    \ only bash runs on remote SSH sandbox\ntool_config:\n  bash:\n    sandbox: ssh-dev\n\
+    ---\n\n# SSH Test Agent\n\nYou are a test agent. Your bash tool executes on a\
+    \ remote Linux machine via SSH.\nOther tools (read_file, write_file, glob, grep)\
+    \ run on the local sandbox.\nUse bash to explore the remote filesystem.\n"

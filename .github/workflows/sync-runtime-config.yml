@@ -5,12 +5,13 @@
 # source file changes on main, this workflow regenerates the ConfigMaps and
 # commits them so ArgoCD can sync the updated runtime configuration.
 #
-# Source → ConfigMap mapping:
-#   .agents/agents/*.md       → agents-configmap.yaml     (auto-mount keys as files)
-#   .agents/providers/*.toml  → providers-configmap.yaml   (auto-mount keys as files)
-#   .agents/skills/*/SKILL.md → skills-configmap.yaml      (explicit items: key→subdir/path)
-#   .agents/sandboxes/*.toml  → sandboxes-configmap.yaml   (auto-mount keys as files)
-#   .mcp.json                 → mcp-configmap.yaml         (explicit items: key→.mcp.json)
+# Source → ConfigMap mapping (one ConfigMap per entity):
+#   .agents/agents/*.md       → agents/agent-def-{name}.yaml      (key: {name}.md)
+#   .agents/providers/*.toml  → providers/provider-{name}.yaml    (key: {name}.toml)
+#   .agents/skills/*/SKILL.md → skills/skill-{name}.yaml          (key: SKILL.md)
+#   .agents/sandboxes/*.toml  → sandboxes/sandbox-{name}.yaml     (key: {name}.toml)
+#   .agents/cli-tools/*.toml  → cli-tools/cli-tool-{name}.yaml    (key: {name}.toml)
+#   .mcp.json                 → mcp/mcp-configmap.yaml            (key: mcp.json)
 #
 # Required permissions:
 #   contents: write  (commit generated ConfigMaps)
@@ -25,6 +26,7 @@ on:
       - ".agents/providers/*.toml"
       - ".agents/skills/**"
       - ".agents/sandboxes/*.toml"
+      - ".agents/cli-tools/*.toml"
       - ".mcp.json"
       - "scripts/sync-configmaps.py"
       - ".github/workflows/sync-runtime-config.yml"
@@ -58,11 +60,7 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add deploy/argocd/manifests/runtime-config/agents-configmap.yaml \
-                  deploy/argocd/manifests/runtime-config/providers-configmap.yaml \
-                  deploy/argocd/manifests/runtime-config/skills-configmap.yaml \
-                  deploy/argocd/manifests/runtime-config/sandboxes-configmap.yaml \
-                  deploy/argocd/manifests/runtime-config/mcp-configmap.yaml
+          git add deploy/argocd/manifests/runtime-config/
           git commit -m "ci(gitops): sync runtime config configmaps [skip ci]"
           git pull --rebase origin main
           git push

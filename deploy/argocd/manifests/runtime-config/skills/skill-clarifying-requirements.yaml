@@ -1,25 +1,25 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: agent-skills
+  name: skill-clarifying-requirements
   namespace: vol-agent-system
   labels:
-    app.kubernetes.io/name: agent-skills
+    app.kubernetes.io/name: skill-clarifying-requirements
     app.kubernetes.io/part-of: vol-agent
     app.kubernetes.io/component: runtime-config
 data:
-  clarifying-requirements.SKILL.md: "---\nname: clarifying-requirements\ndescription:\
-    \ Use when a user presents a vague, incomplete, or high-level request before exploring\
-    \ solutions. Use when requirements need refining, scope needs understanding, or\
-    \ success criteria are unclear. Use when you feel tempted to explore code or start\
-    \ implementing before understanding what the user actually wants.\n---\n\n# Clarifying\
-    \ Requirements\n\nTurn vague requests into precise, actionable requirements through\
-    \ structured dialogue.\n\nThis skill sits **between** the user's initial request\
-    \ and any design/brainstorming work. It ensures you understand *what* to build\
-    \ before figuring out *how* to build it.\n\n<HARD-GATE>\nDo NOT read any code,\
-    \ make any file changes, invoke brainstorming, writing-plans, or any implementation\
-    \ skill until you have:\n1. Restated the request and received user confirmation\n\
-    2. Asked at least one clarifying question and received an answer\n\nExploration\
+  SKILL.md: "---\nname: clarifying-requirements\ndescription: Use when a user presents\
+    \ a vague, incomplete, or high-level request before exploring solutions. Use when\
+    \ requirements need refining, scope needs understanding, or success criteria are\
+    \ unclear. Use when you feel tempted to explore code or start implementing before\
+    \ understanding what the user actually wants.\n---\n\n# Clarifying Requirements\n\
+    \nTurn vague requests into precise, actionable requirements through structured\
+    \ dialogue.\n\nThis skill sits **between** the user's initial request and any\
+    \ design/brainstorming work. It ensures you understand *what* to build before\
+    \ figuring out *how* to build it.\n\n<HARD-GATE>\nDo NOT read any code, make any\
+    \ file changes, invoke brainstorming, writing-plans, or any implementation skill\
+    \ until you have:\n1. Restated the request and received user confirmation\n2.\
+    \ Asked at least one clarifying question and received an answer\n\nExploration\
     \ of files is ONLY allowed AFTER initial clarification. During exploration, do\
     \ NOT plan implementation — only understand what exists.\nThis applies to EVERY\
     \ request, regardless of perceived simplicity or time pressure.\n</HARD-GATE>\n\

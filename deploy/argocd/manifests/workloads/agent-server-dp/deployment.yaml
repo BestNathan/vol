@@ -71,66 +71,17 @@ spec:
             - name: config
               mountPath: /etc/agent-server
               readOnly: true
-            # Parent dirs (emptyDir) — create directory structure for subPath files
-            - name: agent-agents-dir
+            - name: agent-definitions
               mountPath: /app/.agents/agents
-            - name: agent-providers-dir
-              mountPath: /app/.agents/providers
-            - name: agent-skills-dir
-              mountPath: /app/.agents/skills
-            - name: agent-sandboxes-dir
-              mountPath: /app/.agents/sandboxes
-            # agent-definitions (7 files) — subPath, no symlink artifacts
-            - name: agent-definitions
-              mountPath: /app/.agents/agents/ansible.md
-              subPath: ansible.md
               readOnly: true
-            - name: agent-definitions
-              mountPath: /app/.agents/agents/dingtalk.md
-              subPath: dingtalk.md
-              readOnly: true
-            - name: agent-definitions
-              mountPath: /app/.agents/agents/explore.md
-              subPath: explore.md
-              readOnly: true
-            - name: agent-definitions
-              mountPath: /app/.agents/agents/general-purpose.md
-              subPath: general-purpose.md
-              readOnly: true
-            - name: agent-definitions
-              mountPath: /app/.agents/agents/review.md
-              subPath: review.md
-              readOnly: true
-            - name: agent-definitions
-              mountPath: /app/.agents/agents/ssh-test.md
-              subPath: ssh-test.md
-              readOnly: true
-            - name: agent-definitions
-              mountPath: /app/.agents/agents/task-cli-test.md
-              subPath: task-cli-test.md
-              readOnly: true
-            # agent-providers (1 file)
             - name: agent-providers
-              mountPath: /app/.agents/providers/anthropic-dashscope.toml
-              subPath: anthropic-dashscope.toml
+              mountPath: /app/.agents/providers
               readOnly: true
-            # agent-skills (1 file)
             - name: agent-skills
-              mountPath: /app/.agents/skills/clarifying-requirements/SKILL.md
-              subPath: clarifying-requirements.SKILL.md
-              readOnly: true
-            # agent-sandboxes (3 files)
-            - name: agent-sandboxes
-              mountPath: /app/.agents/sandboxes/ansible-prod.toml
-              subPath: ansible-prod.toml
+              mountPath: /app/.agents/skills
               readOnly: true
             - name: agent-sandboxes
-              mountPath: /app/.agents/sandboxes/local-for-cli.toml
-              subPath: local-for-cli.toml
-              readOnly: true
-            - name: agent-sandboxes
-              mountPath: /app/.agents/sandboxes/ssh-dev.toml
-              subPath: ssh-dev.toml
+              mountPath: /app/.agents/sandboxes
               readOnly: true
             - name: mcp-config
               mountPath: /app/.mcp.json
@@ -173,34 +124,37 @@ spec:
               - key: agent-server.toml
                 path: agent-server.toml
             defaultMode: 0644
-        # EmptyDirs to create parent directories for subPath mounts
-        - name: agent-agents-dir
-          emptyDir: {}
-        - name: agent-providers-dir
-          emptyDir: {}
-        - name: agent-skills-dir
-          emptyDir: {}
-        - name: agent-sandboxes-dir
-          emptyDir: {}
-        # ConfigMaps — mounted via subPath as individual files
         - name: agent-definitions
-          configMap:
-            name: agent-definitions
+          projected:
+            sources:
+              - configMap: { name: agent-def-ansible }
+              - configMap: { name: agent-def-dingtalk }
+              - configMap: { name: agent-def-explore }
+              - configMap: { name: agent-def-general-purpose }
+              - configMap: { name: agent-def-review }
+              - configMap: { name: agent-def-ssh-test }
+              - configMap: { name: agent-def-task-cli-test }
             defaultMode: 0644
         - name: agent-providers
-          configMap:
-            name: agent-providers
+          projected:
+            sources:
+              - configMap: { name: provider-anthropic-dashscope }
             defaultMode: 0644
         - name: agent-skills
-          configMap:
-            name: agent-skills
-            items:
-              - key: clarifying-requirements.SKILL.md
-                path: clarifying-requirements/SKILL.md
+          projected:
+            sources:
+              - configMap:
+                  name: skill-clarifying-requirements
+                  items:
+                    - key: SKILL.md
+                      path: clarifying-requirements/SKILL.md
             defaultMode: 0644
         - name: agent-sandboxes
-          configMap:
-            name: agent-sandboxes
+          projected:
+            sources:
+              - configMap: { name: sandbox-ansible-prod }
+              - configMap: { name: sandbox-local-for-cli }
+              - configMap: { name: sandbox-ssh-dev }
             defaultMode: 0644
         - name: mcp-config
           configMap:

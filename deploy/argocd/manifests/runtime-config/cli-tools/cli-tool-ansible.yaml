@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cli-tool-ansible
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: cli-tool-ansible
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: runtime-config
+data:
+  ansible.toml: "name = \"ansible\"\nenabled = true\ndescription = \"\"\"\nAnsible\
+    \ automation suite.\n\nAvailable CLIs:\n- `ansible <pattern> -m <module> -a <args>`\
+    \ - ad-hoc commands\n  Examples:\n  - `ansible all -m ping`\n  - `ansible webservers\
+    \ -a \"uptime\"`\n- `ansible-playbook <playbook.yml> [options]` - run playbooks\n\
+    \  Options: --limit, --tags, --skip-tags, --check, --diff, --extra-vars\n  Examples:\n\
+    \  - `ansible-playbook site.yml --limit web`\n- `ansible-galaxy <action>` - manage\
+    \ roles/collections\n- `ansible-vault <action>` - encrypt/decrypt secrets\n\n\
+    For end-to-end workflows, invoke skill `ansible-usage`.\n\"\"\"\n\nbinaries =\
+    \ [\"ansible\", \"ansible-playbook\", \"ansible-galaxy\", \"ansible-vault\"]\n\
+    \nsandbox_ref = \"ansible-prod\"   # <- requires .agents/sandboxes/ansible-prod.toml\n\
+    \ncwd = \"/opt/ansible\"\nshell = \"/bin/bash\"\ntimeout_secs = 300\nmax_output_bytes\
+    \ = 65536\n\n[env]\nANSIBLE_CONFIG = \"{{env.HOME}}/ansible/ansible.cfg\"\nSSH_AUTH_SOCK\
+    \ = \"{{env.SSH_AUTH_SOCK}}\"\n"

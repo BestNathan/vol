@@ -98,11 +98,16 @@ spec:
               readOnly: true
       volumes:
         - name: cli-tools
-          configMap:
-            name: cli-tools
+          projected:
+            sources:
+              - configMap: { name: cli-tool-ansible }
+              - configMap: { name: cli-tool-echo-tool }
         - name: sandboxes
-          configMap:
-            name: agent-sandboxes
+          projected:
+            sources:
+              - configMap: { name: sandbox-ansible-prod }
+              - configMap: { name: sandbox-local-for-cli }
+              - configMap: { name: sandbox-ssh-dev }
         - name: ssh-key
           secret:
             secretName: ansible-ssh-key

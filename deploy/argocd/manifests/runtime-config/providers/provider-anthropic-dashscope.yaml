@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: agent-providers
+  name: provider-anthropic-dashscope
   namespace: vol-agent-system
   labels:
-    app.kubernetes.io/name: agent-providers
+    app.kubernetes.io/name: provider-anthropic-dashscope
     app.kubernetes.io/part-of: vol-agent
     app.kubernetes.io/component: runtime-config
 data:

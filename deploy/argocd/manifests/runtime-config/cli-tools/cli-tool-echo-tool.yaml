@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cli-tool-echo-tool
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: cli-tool-echo-tool
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: runtime-config
+data:
+  echo-tool.toml: 'name = "echo-tool"
+
+    description = "Test tool that runs echo via local sandbox"
+
+    binaries = ["echo", "date"]
+
+    sandbox_ref = "local-for-cli"
+
+    cwd = "/tmp"
+
+    '

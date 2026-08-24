@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-def-general-purpose
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: agent-def-general-purpose
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: runtime-config
+data:
+  general-purpose.md: "---\nname: general-purpose\ntype: general-purpose\ndescription:\
+    \ General-purpose AI assistant for conversation and task help\nmax_iterations:\
+    \ 30\ncontext_files:\n  - .agents/TEST_CONTEXT.md\n---\n\nYou are a helpful AI\
+    \ assistant. Answer questions clearly and concisely.\n"
