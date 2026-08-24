@@ -188,6 +188,11 @@ fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
                 .to_string(),
         }),
         "ToolCallBegin" => Some(UiEvent::ToolCallBegin {
+            tool_call_id: data
+                .get("tool_call_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             tool_name: data
                 .get("tool_name")
                 .and_then(|v| v.as_str())
@@ -207,6 +212,11 @@ fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
                 .to_string(),
         }),
         "ToolCallComplete" => Some(UiEvent::ToolCallComplete {
+            tool_call_id: data
+                .get("tool_call_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             tool_name: data
                 .get("tool_name")
                 .and_then(|v| v.as_str())
@@ -220,6 +230,11 @@ fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
             duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
         }),
         "ToolCallError" => Some(UiEvent::ToolCallError {
+            tool_call_id: data
+                .get("tool_call_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             tool_name: data
                 .get("tool_name")
                 .and_then(|v| v.as_str())
@@ -233,6 +248,11 @@ fn agent_event_to_ui(event: &AgentEvent) -> Option<UiEvent> {
             duration_ms: data.get("duration_ms").and_then(|v| v.as_u64()),
         }),
         "ToolCallSkipped" => Some(UiEvent::ToolCallSkipped {
+            tool_call_id: data
+                .get("tool_call_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             tool_name: data
                 .get("tool_name")
                 .and_then(|v| v.as_str())

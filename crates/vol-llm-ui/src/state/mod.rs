@@ -64,6 +64,7 @@ pub enum UiEvent {
 
     // Tools
     ToolCallBegin {
+        tool_call_id: String,
         tool_name: String,
         arguments: String,
     },
@@ -71,16 +72,19 @@ pub enum UiEvent {
         delta: String,
     },
     ToolCallComplete {
+        tool_call_id: String,
         tool_name: String,
         result: String,
         duration_ms: Option<u64>,
     },
     ToolCallError {
+        tool_call_id: String,
         tool_name: String,
         error: String,
         duration_ms: Option<u64>,
     },
     ToolCallSkipped {
+        tool_call_id: String,
         tool_name: String,
         reason: String,
         duration_ms: Option<u64>,
@@ -218,11 +222,13 @@ pub enum ConversationEntry {
         content: String,
     },
     ToolCall {
+        tool_call_id: String,
         tool_name: String,
         arg_preview: String,
         full_arguments: String,
     },
     ToolResult {
+        tool_call_id: String,
         tool_name: String,
         preview: String,
         full_result: String,
@@ -1348,6 +1354,7 @@ impl UiState {
                 }
             }
             UiEvent::ToolCallBegin {
+                tool_call_id,
                 tool_name,
                 arguments,
             } => {
@@ -1362,6 +1369,7 @@ impl UiState {
                     duration_ms: None,
                 });
                 self.conversation.push(ConversationEntry::ToolCall {
+                    tool_call_id,
                     tool_name,
                     arg_preview: preview,
                     full_arguments: arguments,
@@ -1371,6 +1379,7 @@ impl UiState {
                 // Invisible in UI
             }
             UiEvent::ToolCallComplete {
+                tool_call_id,
                 tool_name,
                 result,
                 duration_ms,
@@ -1378,6 +1387,7 @@ impl UiState {
                 self.update_tool_call_status(&tool_name, ToolCallStatus::Success, duration_ms);
                 let preview = truncate_preview(&result, 200);
                 self.conversation.push(ConversationEntry::ToolResult {
+                    tool_call_id,
                     tool_name,
                     preview,
                     full_result: result,
@@ -1385,6 +1395,7 @@ impl UiState {
                 });
             }
             UiEvent::ToolCallError {
+                tool_call_id,
                 tool_name,
                 error,
                 duration_ms,
@@ -1392,6 +1403,7 @@ impl UiState {
                 self.update_tool_call_status(&tool_name, ToolCallStatus::Error, duration_ms);
                 let err = error;
                 self.conversation.push(ConversationEntry::ToolResult {
+                    tool_call_id,
                     tool_name,
                     preview: err.clone(),
                     full_result: err,
@@ -1399,6 +1411,7 @@ impl UiState {
                 });
             }
             UiEvent::ToolCallSkipped {
+                tool_call_id,
                 tool_name,
                 reason,
                 duration_ms,
@@ -1406,6 +1419,7 @@ impl UiState {
                 self.update_tool_call_status(&tool_name, ToolCallStatus::Skipped, duration_ms);
                 let rsn = reason;
                 self.conversation.push(ConversationEntry::ToolResult {
+                    tool_call_id,
                     tool_name,
                     preview: rsn.clone(),
                     full_result: rsn,
@@ -1643,6 +1657,7 @@ mod tests {
     #[test]
     fn test_ui_event_tool_call_begin_serializes() {
         let event = UiEvent::ToolCallBegin {
+            tool_call_id: "call-1".into(),
             tool_name: "bash".into(),
             arguments: r#"{"cmd":"ls"}"#.into(),
         };
@@ -1709,6 +1724,7 @@ mod tests {
     fn test_ui_state_apply_tool_call_lifecycle() {
         let mut state = UiState::new("sess-1".into(), ".", "local");
         state.apply(UiEvent::ToolCallBegin {
+            tool_call_id: "call-1".into(),
             tool_name: "bash".into(),
             arguments: r#"{"command":"ls"}"#.into(),
         });
@@ -1717,6 +1733,7 @@ mod tests {
         assert_eq!(state.conversation.len(), 1);
 
         state.apply(UiEvent::ToolCallComplete {
+            tool_call_id: "call-1".into(),
             tool_name: "bash".into(),
             result: "file.txt".into(),
             duration_ms: Some(42),
@@ -1760,6 +1777,7 @@ mod tests {
         );
         assert_eq!(
             UiEvent::ToolCallBegin {
+                tool_call_id: "c".into(),
                 tool_name: "x".into(),
                 arguments: "{}".into()
             }

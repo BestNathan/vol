@@ -71,11 +71,13 @@ impl EventBuffer {
             }
 
             AgentStreamEvent::ToolCallBegin {
+                tool_call_id,
                 tool_name,
                 arguments,
                 ..
             } => {
                 state.apply(UiEvent::ToolCallBegin {
+                    tool_call_id: tool_call_id.clone(),
                     tool_name: tool_name.clone(),
                     arguments: arguments.clone(),
                 });
@@ -84,12 +86,14 @@ impl EventBuffer {
                 // Invisible in UI
             }
             AgentStreamEvent::ToolCallComplete {
+                tool_call_id,
                 tool_name,
                 result,
                 duration_ms,
                 ..
             } => {
                 state.apply(UiEvent::ToolCallComplete {
+                    tool_call_id: tool_call_id.clone(),
                     tool_name: tool_name.clone(),
                     result: result.clone(),
                     duration_ms: *duration_ms,
@@ -103,24 +107,28 @@ impl EventBuffer {
                 }
             }
             AgentStreamEvent::ToolCallError {
+                tool_call_id,
                 tool_name,
                 error,
                 duration_ms,
                 ..
             } => {
                 state.apply(UiEvent::ToolCallError {
+                    tool_call_id: tool_call_id.clone(),
                     tool_name: tool_name.clone(),
                     error: error.clone(),
                     duration_ms: *duration_ms,
                 });
             }
             AgentStreamEvent::ToolCallSkipped {
+                tool_call_id,
                 tool_name,
                 reason,
                 duration_ms,
                 ..
             } => {
                 state.apply(UiEvent::ToolCallSkipped {
+                    tool_call_id: tool_call_id.clone(),
                     tool_name: tool_name.clone(),
                     reason: reason.clone(),
                     duration_ms: *duration_ms,

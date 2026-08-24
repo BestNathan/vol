@@ -196,6 +196,7 @@ pub fn reduce_conversation(s: &mut ConversationState, event: &UiEvent) {
         UiEvent::ToolCallBegin {
             tool_name,
             arguments,
+            ..
         } => {
             let preview = crate::state::format_tool_args(arguments);
             conv.entries.push(ConversationEntry::ToolCall {

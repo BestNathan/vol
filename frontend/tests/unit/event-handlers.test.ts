@@ -43,7 +43,7 @@ describe('handleUiEvent → toolCallsAtom', () => {
 
   it('appends a Running entry on tool_call_begin with seq and arg preview', () => {
     handleUiEvent(
-      { type: 'tool_call_begin', tool_name: 'bash', arguments: '{"command":"ls"}' },
+      { type: 'tool_call_begin', tool_call_id: 'c1', tool_name: 'bash', arguments: '{"command":"ls"}' },
       'run-1'
     )
     expect(store.get(toolCallsAtom)).toEqual([
@@ -56,7 +56,7 @@ describe('handleUiEvent → toolCallsAtom', () => {
       { sequence: 1, toolName: 'bash', argPreview: 'ls', status: 'Running', durationMs: null },
     ])
     handleUiEvent(
-      { type: 'tool_call_complete', tool_name: 'bash', result: 'ok', duration_ms: 12 },
+      { type: 'tool_call_complete', tool_call_id: 'c1', tool_name: 'bash', result: 'ok', duration_ms: 12 },
       'run-1'
     )
     expect(store.get(toolCallsAtom)).toEqual([
@@ -70,11 +70,11 @@ describe('handleUiEvent → toolCallsAtom', () => {
       { sequence: 2, toolName: 'read_file', argPreview: 'x', status: 'Running', durationMs: null },
     ])
     handleUiEvent(
-      { type: 'tool_call_error', tool_name: 'bash', error: 'boom', duration_ms: 3 },
+      { type: 'tool_call_error', tool_call_id: 'c1', tool_name: 'bash', error: 'boom', duration_ms: 3 },
       'run-1'
     )
     handleUiEvent(
-      { type: 'tool_call_skipped', tool_name: 'read_file', reason: 'no', duration_ms: 4 },
+      { type: 'tool_call_skipped', tool_call_id: 'c2', tool_name: 'read_file', reason: 'no', duration_ms: 4 },
       'run-1'
     )
     expect(store.get(toolCallsAtom)).toEqual([
@@ -89,7 +89,7 @@ describe('handleUiEvent → toolCallsAtom', () => {
       { sequence: 2, toolName: 'bash', argPreview: 'pwd', status: 'Running', durationMs: null },
     ])
     handleUiEvent(
-      { type: 'tool_call_complete', tool_name: 'bash', result: 'ok', duration_ms: 7 },
+      { type: 'tool_call_complete', tool_call_id: 'c2', tool_name: 'bash', result: 'ok', duration_ms: 7 },
       'run-1'
     )
     const calls = store.get(toolCallsAtom)
@@ -106,7 +106,7 @@ describe('handleUiEvent → toolCallsAtom', () => {
       { sequence: 1, toolName: 'bash', argPreview: 'ls', status: 'Success', durationMs: 5 },
     ])
     handleUiEvent(
-      { type: 'tool_call_complete', tool_name: 'bash', result: 'ok', duration_ms: 12 },
+      { type: 'tool_call_complete', tool_call_id: 'c1', tool_name: 'bash', result: 'ok', duration_ms: 12 },
       'run-1'
     )
     expect(store.get(toolCallsAtom)).toEqual([

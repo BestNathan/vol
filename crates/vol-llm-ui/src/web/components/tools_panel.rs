@@ -78,6 +78,7 @@ fn reduce_tool_state(s: &mut ToolState, event: &UiEvent) {
         UiEvent::ToolCallBegin {
             tool_name,
             arguments,
+            ..
         } => {
             let seq = s.calls.len() as u32 + 1;
             s.calls.push(ToolCallEntry {

@@ -205,6 +205,7 @@ export function handleUiEvent(event: UiEvent, runId: string) {
             toolName: event.tool_name,
             argPreview: preview,
             fullArguments: event.arguments,
+            toolCallId: event.tool_call_id,
           })
         })
       break
@@ -222,6 +223,7 @@ export function handleUiEvent(event: UiEvent, runId: string) {
             preview,
             fullResult: event.result,
             success: true,
+            toolCallId: event.tool_call_id,
           })
         })
       break
@@ -238,6 +240,7 @@ export function handleUiEvent(event: UiEvent, runId: string) {
             preview: event.error,
             fullResult: event.error,
             success: false,
+            toolCallId: event.tool_call_id,
           })
         })
       break
@@ -254,6 +257,7 @@ export function handleUiEvent(event: UiEvent, runId: string) {
             preview: event.reason,
             fullResult: event.reason,
             success: false,
+            toolCallId: event.tool_call_id,
           })
         })
       break
@@ -373,12 +377,18 @@ export function agentEventToUiEvent(
     case 'ContentComplete':
       return { type: 'content_complete', content: s('content') }
     case 'ToolCallBegin':
-      return { type: 'tool_call_begin', tool_name: s('tool_name'), arguments: s('arguments') }
+      return {
+        type: 'tool_call_begin',
+        tool_call_id: s('tool_call_id'),
+        tool_name: s('tool_name'),
+        arguments: s('arguments'),
+      }
     case 'ToolCallArgumentDelta':
       return { type: 'tool_call_argument_delta', delta: s('delta') }
     case 'ToolCallComplete':
       return {
         type: 'tool_call_complete',
+        tool_call_id: s('tool_call_id'),
         tool_name: s('tool_name'),
         result: s('result'),
         duration_ms: n('duration_ms') as number | undefined,
@@ -386,6 +396,7 @@ export function agentEventToUiEvent(
     case 'ToolCallError':
       return {
         type: 'tool_call_error',
+        tool_call_id: s('tool_call_id'),
         tool_name: s('tool_name'),
         error: s('error'),
         duration_ms: n('duration_ms') as number | undefined,
@@ -393,6 +404,7 @@ export function agentEventToUiEvent(
     case 'ToolCallSkipped':
       return {
         type: 'tool_call_skipped',
+        tool_call_id: s('tool_call_id'),
         tool_name: s('tool_name'),
         reason: s('reason'),
         duration_ms: n('duration_ms') as number | undefined,

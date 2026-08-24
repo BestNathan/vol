@@ -30,11 +30,29 @@ export type UiEvent =
   | { type: 'content_start' }
   | { type: 'content_delta'; delta: string }
   | { type: 'content_complete'; content: string }
-  | { type: 'tool_call_begin'; tool_name: string; arguments: string }
+  | { type: 'tool_call_begin'; tool_call_id: string; tool_name: string; arguments: string }
   | { type: 'tool_call_argument_delta'; delta: string }
-  | { type: 'tool_call_complete'; tool_name: string; result: string; duration_ms?: number }
-  | { type: 'tool_call_error'; tool_name: string; error: string; duration_ms?: number }
-  | { type: 'tool_call_skipped'; tool_name: string; reason: string; duration_ms?: number }
+  | {
+      type: 'tool_call_complete'
+      tool_call_id: string
+      tool_name: string
+      result: string
+      duration_ms?: number
+    }
+  | {
+      type: 'tool_call_error'
+      tool_call_id: string
+      tool_name: string
+      error: string
+      duration_ms?: number
+    }
+  | {
+      type: 'tool_call_skipped'
+      tool_call_id: string
+      tool_name: string
+      reason: string
+      duration_ms?: number
+    }
   | { type: 'max_iterations_reached'; current: number; max: number }
   | { type: 'iteration_continued'; from_iteration: number }
   | { type: 'iteration_complete'; iteration: number; final_answer?: string }
