@@ -10,6 +10,7 @@
   ],
   "sandboxes": [
     "sandbox-ansible-prod",
+    "sandbox-gh-sandbox",
     "sandbox-local-for-cli",
     "sandbox-ssh-dev"
   ],
@@ -18,7 +19,8 @@
   ],
   "cli_tools": [
     "cli-tool-ansible",
-    "cli-tool-echo-tool"
+    "cli-tool-echo-tool",
+    "cli-tool-gh"
   ],
   "skills": [
     "skill-clarifying-requirements"

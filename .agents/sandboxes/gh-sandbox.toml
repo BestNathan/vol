@@ -1,0 +1,3 @@
+name = "gh-sandbox"
+type = "local"
+work_dir = "/tmp"

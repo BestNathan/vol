@@ -1,0 +1,28 @@
+name = "gh"
+enabled = true
+description = """
+GitHub CLI — manage repos, issues, pull requests, actions, and releases.
+
+Common commands:
+- `gh repo view` — show current repo info
+- `gh issue list` / `gh issue create --title T --body B`
+- `gh pr list` / `gh pr view NUM` / `gh pr create --title T --body B --base main`
+- `gh pr checkout NUM` — check out a PR branch
+- `gh run list` / `gh run view ID` / `gh run watch ID`
+- `gh release list` / `gh release create TAG --title T --notes N`
+- `gh api REST_PATH` — raw REST API call (e.g. `gh api repos/{owner}/{repo}`)
+- `gh search repos KEYWORD` / `gh search code KEYWORD`
+- `gh auth status` — check current auth (requires GH_TOKEN env var)
+
+All commands require `GH_TOKEN` to be set in the environment.
+"""
+binaries = ["gh"]
+sandbox_ref = "gh-sandbox"
+cwd = "/tmp"
+shell = "/bin/bash"
+timeout_secs = 120
+max_output_bytes = 131072
+
+[env]
+GH_TOKEN = "{{env.GITHUB_TOKEN}}"
+GH_PROMPT_DISABLED = "1"

@@ -77,6 +77,12 @@ spec:
               value: "/app"
             - name: SSH_KEY_PATH
               value: "/app/.ssh/id_ed25519"
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agent-github-secret
+                  key: GITHUB_TOKEN
+                  optional: true
           resources:
             requests:
               cpu: 100m
@@ -102,10 +108,12 @@ spec:
             sources:
               - configMap: { name: cli-tool-ansible }
               - configMap: { name: cli-tool-echo-tool }
+              - configMap: { name: cli-tool-gh }
         - name: sandboxes
           projected:
             sources:
               - configMap: { name: sandbox-ansible-prod }
+              - configMap: { name: sandbox-gh-sandbox }
               - configMap: { name: sandbox-local-for-cli }
               - configMap: { name: sandbox-ssh-dev }
         - name: ssh-key

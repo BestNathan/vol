@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sandbox-gh-sandbox
+  namespace: vol-agent-system
+  labels:
+    app.kubernetes.io/name: sandbox-gh-sandbox
+    app.kubernetes.io/part-of: vol-agent
+    app.kubernetes.io/component: runtime-config
+data:
+  gh-sandbox.toml: 'name = "gh-sandbox"
+
+    type = "local"
+
+    work_dir = "/tmp"
+
+    '
