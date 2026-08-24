@@ -24,6 +24,14 @@ interface SessionMsg {
   content?: unknown
   thinking?: unknown
   tool_calls?: unknown
+  tool_call_id?: unknown
+}
+
+/** Shape of a tool call entry in the tool_calls array. */
+interface SessionToolCall {
+  id?: string
+  name?: string
+  arguments?: unknown
 }
 
 /** Shape of SessionEntryData (polymorphic, keyed by entry type). */
@@ -79,7 +87,7 @@ export function sessionEntriesToConversation(entries: SessionEntry[]): Conversat
           // Extract tool_calls if present.
           if (Array.isArray(msg.tool_calls)) {
             for (const tc of msg.tool_calls) {
-              const t = tc as { name?: string; arguments?: unknown }
+              const t = tc as SessionToolCall
               const fullArguments =
                 typeof t.arguments === 'string' ? t.arguments : JSON.stringify(t.arguments ?? {})
               out.push({
@@ -87,6 +95,7 @@ export function sessionEntriesToConversation(entries: SessionEntry[]): Conversat
                 toolName: t.name ?? 'tool',
                 argPreview: formatToolArgs(fullArguments),
                 fullArguments,
+                toolCallId: t.id,
               })
             }
           }
@@ -99,6 +108,7 @@ export function sessionEntriesToConversation(entries: SessionEntry[]): Conversat
             preview: truncatePreview(text, 200),
             fullResult: text,
             success: true,
+            toolCallId: typeof msg.tool_call_id === 'string' ? msg.tool_call_id : undefined,
           })
         }
         break

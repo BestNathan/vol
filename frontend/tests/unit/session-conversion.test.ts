@@ -235,12 +235,13 @@ describe('sessionEntriesToConversation', () => {
     ] as unknown as SessionEntry[]
 
     expect(sessionEntriesToConversation(entries)).toEqual([
-      { type: 'UserInput', text: '详细分析当前项目并生成一个文档上传到飞书' },
+      { type: 'UserInput', text: '详细分析当前项目并生成一个文档上传到飞书', images: undefined },
       {
         type: 'ToolCall',
         toolName: 'bash',
         argPreview: 'ls -la && echo ---FILES--- && find . -maxdepth 3 -type f | head -80',
         fullArguments: '{"command": "ls -la && echo ---FILES--- && find . -maxdepth 3 -type f | head -80"}',
+        toolCallId: 'toolu_15b0acbf7de34d7082b99c23',
       },
       { type: 'AgentAnswer', text: 'Calling tools to get information.' },
       {
@@ -249,6 +250,7 @@ describe('sessionEntriesToConversation', () => {
         preview: 'stdout:\ntotal 276\ndrwxr-xr-x 17 root root 4096 Apr 26 11:33 .',
         fullResult: 'stdout:\ntotal 276\ndrwxr-xr-x 17 root root 4096 Apr 26 11:33 .',
         success: true,
+        toolCallId: undefined,
       },
     ])
   })

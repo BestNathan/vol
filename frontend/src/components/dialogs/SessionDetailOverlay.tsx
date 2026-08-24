@@ -37,13 +37,17 @@ function EntryView({
   const [detailOpen, setDetailOpen] = useState(false)
 
   // Find matching ToolResult/ToolCall for dialog
+  // Prefer matching by toolCallId when available (session data), fall back to name matching
   const toolDetail =
     entry.type === 'ToolCall'
       ? (() => {
-          const resultEntry = entries
-            .slice(index + 1)
-            .find((e) => e.type === 'ToolResult' && e.toolName === entry.toolName) as
-            (ConversationEntry & { type: 'ToolResult' }) | undefined
+          const resultEntry = entries.slice(index + 1).find((e) => {
+            if (e.type !== 'ToolResult') return false
+            // Match by ID if both have it
+            if (entry.toolCallId && e.toolCallId) return e.toolCallId === entry.toolCallId
+            // Fall back to name matching
+            return e.toolName === entry.toolName
+          }) as (ConversationEntry & { type: 'ToolResult' }) | undefined
           return {
             toolName: entry.toolName,
             fullArguments: entry.fullArguments,
@@ -57,8 +61,13 @@ function EntryView({
             const callEntry = entries
               .slice(0, index)
               .reverse()
-              .find((e) => e.type === 'ToolCall' && e.toolName === entry.toolName) as
-              (ConversationEntry & { type: 'ToolCall' }) | undefined
+              .find((e) => {
+                if (e.type !== 'ToolCall') return false
+                // Match by ID if both have it
+                if (entry.toolCallId && e.toolCallId) return e.toolCallId === entry.toolCallId
+                // Fall back to name matching
+                return e.toolName === entry.toolName
+              }) as (ConversationEntry & { type: 'ToolCall' }) | undefined
             return {
               toolName: entry.toolName,
               fullArguments: callEntry?.fullArguments ?? '',

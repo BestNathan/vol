@@ -21,8 +21,21 @@ export type ConversationEntry =
   | { type: 'UserInput'; text: string; images?: string[] }
   | { type: 'Thinking'; content: string }
   | { type: 'ContentStreaming'; content: string }
-  | { type: 'ToolCall'; toolName: string; argPreview: string; fullArguments: string }
-  | { type: 'ToolResult'; toolName: string; preview: string; fullResult: string; success: boolean }
+  | {
+      type: 'ToolCall'
+      toolName: string
+      argPreview: string
+      fullArguments: string
+      toolCallId?: string
+    }
+  | {
+      type: 'ToolResult'
+      toolName: string
+      preview: string
+      fullResult: string
+      success: boolean
+      toolCallId?: string
+    }
   | { type: 'AgentAnswer'; text: string }
   | { type: 'RunSummary'; iterations: number; toolCalls: number; elapsedMs: number }
   | { type: 'EntryCheckpoint'; reason: string; note: string | null; createdAt: number }
