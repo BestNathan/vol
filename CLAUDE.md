@@ -45,6 +45,7 @@ scripts/                  # Build / deploy helpers
 - **No `vol-agent-control-plane` crate** — control-plane lives in `vol-agent-server::control_plane`.
 - **`vol-llm-agent-protocol` must not depend on `vol-agent-server`** (verify: `./scripts/check-agent-boundaries.sh`).
 - **`vol-llm-runtime` must not depend on `vol-agent-server`**.
+- **No plaintext Kubernetes Secrets in git** — commit `kind: SealedSecret` (encrypted via sealed-secrets) only. Use `scripts/seal-secret.sh` to encrypt (auto-downloads the right kubeseal version from the cluster). Plain `kind: Secret` is blocked by `scripts/check-no-plaintext-secrets.sh` (pre-commit + CI). Documentation placeholders are OK only if named `*.example.yaml` / `*.template.yaml`.
 - **JSON-RPC params/results are flat** — `ControlPayload` must not use `#[serde(tag/ content=...)]`.
 - **Route collision**: `control_plane.client_ws_path` must ≠ `node_ws_path` and ≠ `/health` (config validation rejects).
 - **Combined mode** (`control_plane=true, data_plane=true`): `/ws` goes to control-plane; local data-plane registers in-process.

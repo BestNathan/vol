@@ -14,9 +14,6 @@ if [ -z "$CHANGES" ]; then
   exit 0
 fi
 
-# ── Plaintext-secret check (cross-cutting — runs before language gate) ─
-"$SCRIPT_DIR/scripts/check-no-plaintext-secrets.sh" || exit 1
-
 eval "$(echo "$CHANGES" | "$SCRIPT_DIR/scripts/detect-changes.sh")"
 
 if [ "$NO_CHANGES" = "true" ]; then
@@ -31,6 +28,12 @@ if ! command -v just >/dev/null 2>&1; then
 fi
 
 HAS_ERROR=0
+
+# ── Plaintext-secret check (only when deploy/ or k8s/ changed) ───────
+if [ "$DEPLOY_CHANGED" = "true" ]; then
+  "$SCRIPT_DIR/scripts/check-no-plaintext-secrets.sh" || HAS_ERROR=1
+  if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
+fi
 
 # ── Rust checks ───────────────────────────────────────────────────────
 if [ "$RUST_CHANGED" = "true" ]; then

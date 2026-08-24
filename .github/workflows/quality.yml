@@ -3,6 +3,7 @@
 #
 #   quality-rust       — crates/** changed  → fmt, clippy, unit, integration, boundaries (GATE)
 #   quality-frontend   — frontend/** changed → tsc, vitest unit + integration (GATE)
+#   quality-deploy     — deploy/** or k8s/** changed → no plaintext secrets (GATE)
 #   coverage           — crates/** changed  → llvm-cov summary (report only, no gate)
 #   coverage-frontend  — frontend/** changed → vitest coverage (report only, no gate)
 #
@@ -41,6 +42,7 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      deploy: ${{ steps.filter.outputs.deploy }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -59,6 +61,9 @@ jobs:
               - 'scripts/**'
             frontend:
               - 'frontend/**'
+            deploy:
+              - 'deploy/**'
+              - 'k8s/**'
 
   # ── Rust quality gate ───────────────────────────────────────────────────
   # fmt + clippy + unit + integration + boundaries. Failing any of these
@@ -153,6 +158,30 @@ jobs:
 
       - name: Vitest integration (tests/integration, jsdom)
         run: just fe-test-integration
+
+  # ── Deploy / K8s quality gate ───────────────────────────────────────────
+  # Rejects plaintext Kubernetes Secrets (kind: Secret). Everything must go
+  # through sealed-secrets (kind: SealedSecret). See scripts/seal-secret.sh.
+  quality-deploy:
+    name: quality-deploy
+    needs: changes
+    if: ${{ needs.changes.outputs.deploy == 'true' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Check no plaintext Kubernetes Secrets
+        run: just no-plaintext-secrets
 
   # ── Rust coverage report (no gate) ──────────────────────────────────────
   coverage:

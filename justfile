@@ -196,6 +196,10 @@ no-clippy-allow:
 boundaries:
     @./scripts/check-agent-boundaries.sh
 
+# Check no plaintext Kubernetes Secrets in deploy/ or k8s/
+no-plaintext-secrets:
+    @./scripts/check-no-plaintext-secrets.sh --all
+
 # ── Web dev (React frontend) ────────────────────────────────────────────
 
 # Start Vite React dev server (port 5173, WS proxy to :3001)
