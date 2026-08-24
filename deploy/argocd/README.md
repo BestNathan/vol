@@ -128,6 +128,75 @@ The workflow also writes `.summary.json` listing all generated ConfigMap names p
 
 **Adding a new agent/tool/sandbox/etc.:** After committing the source file, the CI syncs the new per-entity ConfigMap. Update the projected-volume `sources` list in the relevant workload deployment(s) to include the new ConfigMap name.
 
+## MCP Server Capabilities
+
+Each MCP server exposes a set of tools to agents. The relationship is:
+- **CLI tool definition** (`.agents/cli-tools/{name}.toml`) → **one MCP tool** in `cli-tools-mcp`
+- **Skill definition** (`.agents/skills/{name}/SKILL.md`) → skill available to agents
+- **Agent definition** (`.agents/agents/{name}.md`) → agent with configured MCP servers
+
+### cli-tools-mcp
+
+Executes CLI commands in sandboxed environments. Each `.agents/cli-tools/*.toml` file becomes one MCP tool.
+
+| Tool | Sandbox | Description |
+|------|---------|-------------|
+| `ansible` | `ansible-prod` (SSH) | Ansible automation: playbooks, ad-hoc commands, roles |
+| `echo-tool` | `local-for-cli` (local) | Test tool: echoes input (for validation) |
+| `gh` | `gh-sandbox` (local) | GitHub CLI: repos, issues, PRs, actions, releases |
+
+**Adding a new CLI tool:**
+1. Create `.agents/cli-tools/{name}.toml` with tool config
+2. Ensure the referenced sandbox exists in `.agents/sandboxes/`
+3. Commit → CI auto-generates `cli-tools/cli-tool-{name}.yaml`
+4. Update `cli-tools-mcp` deployment's projected volume to include the new ConfigMap
+5. If the tool requires binaries in the container, update `dockers/vol-mcp-servers.Dockerfile`
+
+### docs-rs-mcp
+
+Read-only access to Rust crate documentation from docs.rs.
+
+| Tool | Description |
+|------|-------------|
+| `docs_rs_search_crates` | Search for Rust crates by keywords on crates.io |
+| `docs_rs_readme` | Get README/overview content of a crate |
+| `docs_rs_get_item` | Get documentation for a specific item (struct, trait, function, etc.) |
+| `docs_rs_search_in_crate` | Search within a crate's documentation |
+
+**Use cases:**
+- Finding crates by functionality
+- Reading crate documentation without leaving the agent
+- Looking up specific types, traits, or functions
+- Understanding crate APIs during development
+
+### playwright-mcp
+
+Browser automation and E2E testing via Playwright.
+
+| Tool | Description |
+|------|-------------|
+| `playwright_*` | Full Playwright API: navigate, click, fill, screenshot, etc. |
+
+**Use cases:**
+- Automated browser testing
+- Web scraping
+- UI validation
+- Visual regression testing
+
+### Agent-MCP Mapping
+
+Agents declare which MCP servers they can use via the `mcps:` field in their definition:
+
+```yaml
+# .agents/agents/ansible.md
+---
+name: ansible
+mcps: [cli-tools-mcp]  # This agent can use all cli-tools-mcp tools
+---
+```
+
+When an agent connects to an MCP server, it receives the full tool list from that server. The Web UI capability drawer shows MCP servers as single capabilities (not individual tools), but the agent has access to all tools exposed by the server.
+
 ## Secrets
 
 `deploy/argocd/manifests/runtime-config/provider-secrets.example.yaml` documents required keys for `agent-server`, but it is excluded from ArgoCD sync.
