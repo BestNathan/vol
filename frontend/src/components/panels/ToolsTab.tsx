@@ -1,10 +1,11 @@
 // frontend/src/components/panels/ToolsTab.tsx
 // Tools tab: DP node tool listing with search filter and inline Run actions.
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useAtom } from 'jotai'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAtom, useAtomValue } from 'jotai'
 import { ChevronRight, Search, Wrench, Hash } from 'lucide-react'
 import { getPanelClient } from '@/lib/panel-client'
 import { systemToolsAtom, toolsLoadingAtom } from '@/stores/tools'
+import { activeNodeIdAtom } from '@/stores/ui'
 import { ToolDetailDialog, type ToolCallOutcome } from '@/components/dialogs/ToolDetailDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,38 +53,57 @@ export function filterToolList(tools: SystemTool[], search: string): SystemTool[
 }
 
 export function ToolsTab() {
+  const nodeId = useAtomValue(activeNodeIdAtom)
   const [tools, setTools] = useAtom(systemToolsAtom)
   const [loading, setLoading] = useAtom(toolsLoadingAtom)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [dialogTool, setDialogTool] = useState<SystemTool | null>(null)
 
-  const loadTools = useCallback(async () => {
-    setLoading(true)
-    setLoadError(null)
-    try {
-      const res = await getPanelClient().call<RpcMethods['tool.list']['result']>('tool.list')
-      setTools(
-        (res.tools ?? []).map((t) => ({
-          name: t.name,
-          description: typeof t.description === 'string' ? t.description : '',
-          parameters: t.parameters,
-        })),
-      )
-    } catch (err) {
-      setTools([])
-      setLoadError((err as { message?: string } | null)?.message ?? String(err))
-    } finally {
-      setLoading(false)
-    }
-  }, [setTools, setLoading])
-
-  // Fetch on mount if not cached; Refresh re-fetches.
+  // Live node mirror for the stale-response guard in async callbacks.
+  const nodeIdRef = useRef(nodeId)
   useEffect(() => {
-    if (tools.length === 0) {
-      void loadTools()
-    }
-  }, [loadTools])
+    nodeIdRef.current = nodeId
+  }, [nodeId])
+
+  // Fetch the tool list for the given node; writes are dropped once the active
+  // node no longer matches the node this fetch was started for (prevents stale
+  // responses from overwriting the new node's data).
+  const loadTools = useCallback(
+    async (target: string | null) => {
+      if (!target) {
+        setTools([])
+        setLoading(false)
+        setLoadError(null)
+        return
+      }
+      setLoading(true)
+      setLoadError(null)
+      try {
+        const res = await getPanelClient().call<RpcMethods['tool.list']['result']>('tool.list')
+        if (nodeIdRef.current !== target) return
+        setTools(
+          (res.tools ?? []).map((t) => ({
+            name: t.name,
+            description: typeof t.description === 'string' ? t.description : '',
+            parameters: t.parameters,
+          })),
+        )
+      } catch (err) {
+        if (nodeIdRef.current !== target) return
+        setTools([])
+        setLoadError((err as { message?: string } | null)?.message ?? String(err))
+      } finally {
+        if (nodeIdRef.current === target) setLoading(false)
+      }
+    },
+    [setTools, setLoading],
+  )
+
+  // Fetch on mount and whenever the active node changes.
+  useEffect(() => {
+    void loadTools(nodeId)
+  }, [loadTools, nodeId])
 
   const executeTool = useCallback(
     async (args: Record<string, unknown>): Promise<ToolCallOutcome> => {
@@ -115,7 +135,12 @@ export function ToolsTab() {
               Tools ({tools.length})
             </span>
           </div>
-          <Button variant="secondary" size="sm" onClick={() => void loadTools()} disabled={loading}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void loadTools(nodeIdRef.current)}
+            disabled={loading}
+          >
             Refresh
           </Button>
         </div>
@@ -143,7 +168,7 @@ export function ToolsTab() {
         ) : loadError ? (
           <div className="flex flex-col items-center gap-2 py-8">
             <div className="text-[13px] text-destructive">Error: {loadError}</div>
-            <Button variant="secondary" size="sm" onClick={() => void loadTools()}>
+            <Button variant="secondary" size="sm" onClick={() => void loadTools(nodeIdRef.current)}>
               Retry
             </Button>
           </div>
