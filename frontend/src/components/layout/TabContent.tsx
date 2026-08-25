@@ -6,12 +6,22 @@ import { TabsContent } from '@/components/ui/tabs'
 import { AgentsPanel } from '@/components/panels/AgentsPanel'
 import { ToolsTab } from '@/components/panels/ToolsTab'
 import { McpPanel } from '@/components/panels/McpPanel'
+import { SandboxesPanel } from '@/components/panels/SandboxesPanel'
 import { SkillsPanel } from '@/components/panels/SkillsPanel'
 import { TasksPanel } from '@/components/panels/TasksPanel'
 import { FileContentView } from '@/components/panels/FileContentView'
 import { LogViewer } from '@/components/panels/LogViewer'
 
-const TABS = ['tasks', 'agents', 'tools', 'workspace', 'skills', 'mcp', 'logs'] as const
+const TABS = [
+  'tasks',
+  'agents',
+  'tools',
+  'workspace',
+  'skills',
+  'mcp',
+  'sandboxes',
+  'logs',
+] as const
 
 const PANELS: Record<string, ComponentType> = {
   tasks: TasksPanel,
@@ -20,6 +30,7 @@ const PANELS: Record<string, ComponentType> = {
   workspace: FileContentView,
   skills: SkillsPanel,
   mcp: McpPanel,
+  sandboxes: SandboxesPanel,
   logs: LogViewer,
 }
 

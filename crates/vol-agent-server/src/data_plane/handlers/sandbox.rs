@@ -6,16 +6,19 @@ use vol_llm_agent_protocol::agent_server_protocol::{
 };
 use vol_llm_agent_protocol::DomainHandler;
 use vol_llm_agent_protocol::ProtocolError;
-use vol_llm_sandbox::Sandbox;
+use vol_llm_sandbox::registry::SandboxRegistry;
 
-/// Handler that dispatches sandbox protocol operations to a local Sandbox instance.
+/// Handler that dispatches sandbox protocol operations to a SandboxRegistry.
+///
+/// `sandbox.list` iterates all registered sandboxes. Other operations use the
+/// default sandbox (registry.default()) for backward compatibility.
 pub struct SandboxHandler {
-    sandbox: Arc<dyn Sandbox>,
+    registry: Arc<SandboxRegistry>,
 }
 
 impl SandboxHandler {
-    pub fn new(sandbox: Arc<dyn Sandbox>) -> Self {
-        Self { sandbox }
+    pub fn new(registry: Arc<SandboxRegistry>) -> Self {
+        Self { registry }
     }
 }
 
@@ -50,23 +53,30 @@ impl DomainHandler for SandboxHandler {
 
         match (op, message.payload) {
             (SandboxOperation::List, Payload::Sandbox(SandboxPayload::List)) => {
-                let info = SandboxInfo {
-                    name: self.sandbox.name().to_string(),
-                    kind: self.sandbox.kind().to_string(),
-                    root_path: self.sandbox.root_path().to_string_lossy().to_string(),
-                };
+                // Iterate all registered sandboxes
+                let sandboxes: Vec<SandboxInfo> = self
+                    .registry
+                    .names()
+                    .into_iter()
+                    .filter_map(|name| {
+                        self.registry.get(name).map(|sb| SandboxInfo {
+                            name: sb.name().to_string(),
+                            kind: sb.kind().to_string(),
+                            root_path: sb.root_path().to_string_lossy().to_string(),
+                        })
+                    })
+                    .collect();
                 Ok(vec![AgentServerMessage::new_result(
                     mid,
                     Operation::Sandbox(SandboxOperation::List),
-                    Payload::Sandbox(SandboxPayload::ListResult {
-                        sandboxes: vec![info],
-                    }),
+                    Payload::Sandbox(SandboxPayload::ListResult { sandboxes }),
                 )])
             }
 
             (SandboxOperation::Exec, Payload::Sandbox(SandboxPayload::Exec { command })) => {
+                let sandbox = self.registry.default();
                 let req: vol_llm_sandbox::CommandRequest = command.into();
-                match self.sandbox.execute(req).await {
+                match sandbox.execute(req).await {
                     Ok(output) => Ok(vec![AgentServerMessage::new_result(
                         mid,
                         Operation::Sandbox(SandboxOperation::Exec),
@@ -99,7 +109,8 @@ impl DomainHandler for SandboxHandler {
                 }),
             ) => {
                 let p = std::path::Path::new(&path);
-                match self.sandbox.read_file(p, offset, limit).await {
+                let sandbox = self.registry.default();
+                match sandbox.read_file(p, offset, limit).await {
                     Ok(content) => {
                         use base64::Engine;
                         let encoded = base64::engine::general_purpose::STANDARD.encode(&content);
@@ -128,7 +139,8 @@ impl DomainHandler for SandboxHandler {
                         ))
                     })?;
                 let p = std::path::Path::new(&path);
-                match self.sandbox.write_file(p, &data).await {
+                let sandbox = self.registry.default();
+                match sandbox.write_file(p, &data).await {
                     Ok(()) => Ok(vec![AgentServerMessage::new_result(
                         mid,
                         Operation::Sandbox(SandboxOperation::WriteFile),
@@ -142,7 +154,8 @@ impl DomainHandler for SandboxHandler {
 
             (SandboxOperation::CreateDir, Payload::Sandbox(SandboxPayload::CreateDir { path })) => {
                 let p = std::path::Path::new(&path);
-                match self.sandbox.create_dir_all(p).await {
+                let sandbox = self.registry.default();
+                match sandbox.create_dir_all(p).await {
                     Ok(()) => Ok(vec![AgentServerMessage::new_result(
                         mid,
                         Operation::Sandbox(SandboxOperation::CreateDir),
@@ -156,7 +169,8 @@ impl DomainHandler for SandboxHandler {
 
             (SandboxOperation::ReadDir, Payload::Sandbox(SandboxPayload::ReadDir { path })) => {
                 let p = std::path::Path::new(&path);
-                match self.sandbox.read_dir(p).await {
+                let sandbox = self.registry.default();
+                match sandbox.read_dir(p).await {
                     Ok(entries) => {
                         let defs: Vec<_> =
                             entries.into_iter().map(std::convert::Into::into).collect();
@@ -174,7 +188,8 @@ impl DomainHandler for SandboxHandler {
 
             (SandboxOperation::Metadata, Payload::Sandbox(SandboxPayload::Metadata { path })) => {
                 let p = std::path::Path::new(&path);
-                match self.sandbox.metadata(p).await {
+                let sandbox = self.registry.default();
+                match sandbox.metadata(p).await {
                     Ok(meta) => Ok(vec![AgentServerMessage::new_result(
                         mid,
                         Operation::Sandbox(SandboxOperation::Metadata),
@@ -221,22 +236,27 @@ mod tests {
     use vol_llm_sandbox::Sandbox;
 
     async fn setup() -> SandboxHandler {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut registry = SandboxRegistry::load(tmp.path()).await.unwrap();
         let sandbox = Arc::new(LocalSandbox::new(None));
         sandbox.start().await.unwrap();
-        SandboxHandler::new(sandbox)
+        registry.register("local", sandbox);
+        SandboxHandler::new(Arc::new(registry))
     }
 
-    #[test]
-    fn test_handler_name() {
-        let sb = LocalSandbox::new(None);
-        let handler = SandboxHandler::new(Arc::new(sb));
+    #[tokio::test]
+    async fn test_handler_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
+        let handler = SandboxHandler::new(Arc::new(registry));
         assert_eq!(handler.name(), "sandbox");
     }
 
-    #[test]
-    fn test_operations_count() {
-        let sb = LocalSandbox::new(None);
-        let handler = SandboxHandler::new(Arc::new(sb));
+    #[tokio::test]
+    async fn test_operations_count() {
+        let tmp = tempfile::tempdir().unwrap();
+        let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
+        let handler = SandboxHandler::new(Arc::new(registry));
         let ops = handler.operations();
         assert_eq!(ops.len(), 7);
     }

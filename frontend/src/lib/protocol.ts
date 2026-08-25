@@ -12,6 +12,7 @@ import type {
   McpServerInfo,
   McpToolInfo,
   NodeListEntry,
+  SandboxInfo,
   SessionListEntry,
   SkillDetail,
   SkillListEntry,
@@ -155,6 +156,7 @@ export interface RpcMethods {
     params: { name: string; arguments?: Record<string, unknown> }
     result: { name: string; prompt: unknown }
   }
+  'sandbox.list': { params: object; result: { sandboxes: SandboxInfo[] } }
   'task.list': { params: { status?: string; assignee?: string }; result: { tasks: TaskEntry[] } }
   'task.get': { params: { task_id: number }; result: { task: TaskEntry | null } }
   'log.list': { params: object; result: { runs: LogRunSummary[] } }

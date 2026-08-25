@@ -9,6 +9,7 @@ use vol_llm_agent_protocol::HandlerRegistry;
 use vol_llm_agent_protocol::MemoryConnection;
 use vol_llm_agent_protocol::MemoryHandle;
 use vol_llm_sandbox::local::LocalSandbox;
+use vol_llm_sandbox::registry::SandboxRegistry;
 use vol_llm_sandbox::Sandbox;
 
 /// Create a test server pair: (MemoryHandle for controlling the server, MemoryHandle for client).
@@ -27,9 +28,13 @@ async fn create_test_server() -> MemoryHandle {
     let sandbox = Arc::new(LocalSandbox::new(None));
     sandbox.start().await.unwrap();
 
-    let mut registry = HandlerRegistry::new();
-    registry
-        .register(Arc::new(SandboxHandler::new(sandbox)))
+    let tmp = tempfile::tempdir().unwrap();
+    let mut registry = SandboxRegistry::load(tmp.path()).await.unwrap();
+    registry.register("local", sandbox);
+
+    let mut handler_reg = HandlerRegistry::new();
+    handler_reg
+        .register(Arc::new(SandboxHandler::new(Arc::new(registry))))
         .unwrap();
 
     let (server_conn, handle) = MemoryConnection::new();
@@ -39,7 +44,7 @@ async fn create_test_server() -> MemoryHandle {
         loop {
             match server_conn.recv().await {
                 Some(Ok(msg)) => {
-                    let replies = registry.dispatch(msg).await.unwrap_or_else(|e| {
+                    let replies = handler_reg.dispatch(msg).await.unwrap_or_else(|e| {
                         vec![AgentServerMessage::new_error(
                             "err",
                             Operation::Sandbox(SandboxOperation::List),

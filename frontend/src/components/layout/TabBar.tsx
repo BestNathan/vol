@@ -11,6 +11,7 @@ const TABS: { id: ActiveTab; label: string }[] = [
   { id: 'workspace', label: 'Workspace' },
   { id: 'skills', label: 'Skills' },
   { id: 'mcp', label: 'MCP' },
+  { id: 'sandboxes', label: 'Sandboxes' },
   { id: 'logs', label: 'Logs' },
 ]
 

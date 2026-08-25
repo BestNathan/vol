@@ -51,8 +51,14 @@ impl ControlPlaneServerCore {
             .start()
             .await
             .map_err(|e| format!("failed to start sandbox: {e}"))?;
+        let mut sandbox_registry = vol_llm_sandbox::registry::SandboxRegistry::load(
+            std::path::Path::new("/tmp/vol-control-plane-sandboxes"),
+        )
+        .await
+        .map_err(|e| format!("failed to load sandbox registry: {e}"))?;
+        sandbox_registry.register("local", local_sandbox);
         handler_registry
-            .register(Arc::new(SandboxHandler::new(local_sandbox)))
+            .register(Arc::new(SandboxHandler::new(Arc::new(sandbox_registry))))
             .map_err(|e| format!("failed to register SandboxHandler: {e}"))?;
 
         Ok(Self {

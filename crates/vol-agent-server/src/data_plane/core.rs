@@ -503,7 +503,7 @@ impl DataPlaneServerCoreBuilder {
             .register(Arc::new(DataPlaneControlHandler::new()))
             .map_err(|e| format!("failed to register DataPlaneControlHandler: {e}"))?;
         handler_registry
-            .register(Arc::new(SandboxHandler::new(sandbox_registry.default())))
+            .register(Arc::new(SandboxHandler::new(sandbox_registry.clone())))
             .map_err(|e| format!("failed to register SandboxHandler: {e}"))?;
         handler_registry
             .register(Arc::new(CapabilityHandler::new(

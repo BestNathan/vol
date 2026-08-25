@@ -1,5 +1,11 @@
 # Change Log
 
+## [2026-08-25] ingest | Sandboxes tab in web frontend
+- Created sources: [[sandboxes-tab-frontend]]
+- Updated entities: [[vol-llm-sandbox-crate]] (SandboxHandler refactor timeline entry; source_count 3->4), [[vol-agent-server-crate]] (SandboxHandler refactor section; source_count 18->19)
+- Cross-references added: 3
+- Changes: SandboxHandler now accepts Arc<SandboxRegistry> instead of Arc<dyn Sandbox>, enabling sandbox.list RPC to return all registered sandboxes; frontend SandboxesPanel added with kind-badge colors; 10 backend unit tests + 4 integration tests + 150 frontend unit tests pass
+
 ## [2026-08-21] ingest | Volatility pipeline removal from main
 - Created sources: [[pipeline-removal-from-main]]
 - Deleted entities: `tdengine` (pipeline market-data storage, page removed)

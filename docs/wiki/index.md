@@ -102,6 +102,7 @@ Last updated: 2026-08-21 (volatility pipeline removed from main: tdengine entity
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[sandboxes-tab-frontend]] | Sandboxes tab in React frontend: SandboxHandler refactored to accept SandboxRegistry (lists all registered sandboxes via sandbox.list), SandboxesPanel with kind-badge colors, new RPC method; 10 backend + 150 frontend tests pass | active | 2026-08-25 |
 | [[pipeline-removal-from-main]] | Volatility pipeline removed from main: advice agent + 12 pipeline crates deleted, vol-tracing/vol-observability renamed to vol-llm-tracing/vol-llm-observability, pipeline infra/docs stripped; pipeline preserved on the archive/volatility-pipeline branch; wiki surgery (tdengine entity deleted, observability entity renamed, dead links repaired) | active | 2026-08-21 |
 | [[readme-restructure]] | README restructured to pure agent six-section layout (agent system / architecture / project structure / install & deploy / AI workflow / tools & commands); volatility pipeline not mentioned per follow-up decision; stale content fixed (make→just, vol-llm-ui deprecated, crate table updated, ArgoCD primary); lean overview style linking to wiki concepts | active | 2026-08-21 |
 | [[provider-bugfixes]] | Four vol-llm-provider production bugfixes (TDD, one commit each): raw string tool-call args, request.system as first system message, symmetric Secret JSON round-trip, streamed ToolCallComplete via ContentBlockStop flush; gate re-verified 95.41%, 120 tests / 0 failed | active | 2026-08-17 |

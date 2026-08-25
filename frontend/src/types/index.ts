@@ -1,5 +1,6 @@
 // Tab routing
-export type ActiveTab = 'tasks' | 'agents' | 'tools' | 'workspace' | 'skills' | 'mcp' | 'logs'
+export type ActiveTab =
+  'tasks' | 'agents' | 'tools' | 'workspace' | 'skills' | 'mcp' | 'sandboxes' | 'logs'
 export type AgentSubTab = 'conversation' | 'sessions' | 'context' | 'tasks' | 'details'
 export type McpSubtab = 'servers' | 'tools' | 'resources' | 'prompts'
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected'
@@ -141,6 +142,11 @@ export interface McpResourceTemplateInfo {
   name: string
   uri_template: string
   description?: string
+}
+export interface SandboxInfo {
+  name: string
+  kind: string
+  root_path: string
 }
 export interface McpPromptInfo {
   server: string

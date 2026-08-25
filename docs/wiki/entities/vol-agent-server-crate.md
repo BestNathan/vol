@@ -3,8 +3,8 @@ type: entity
 category: service
 tags: [server, config, json-rpc, task-store, session-store, data-plane, control-plane, gitops]
 created: 2026-06-09
-updated: 2026-06-17
-source_count: 18
+updated: 2026-08-25
+source_count: 19
 ---
 
 # vol-agent-server Crate
@@ -93,6 +93,13 @@ The `agent-server` deployment lives under `deploy/argocd/manifests/workloads/age
 
 **Important:** Real provider API keys live in `agent-provider-secrets`, not `agent-server-secrets`. Both `agent-server` and `docs-rs-mcp` use `acr-registry-secret` for private ACR pulls.
 
+## SandboxHandler Refactor
+Source: [[sandboxes-tab-frontend]]
+
+`SandboxHandler` (data_plane/handlers/sandbox.rs) was refactored to accept `Arc<SandboxRegistry>` instead of `Arc<dyn Sandbox>`. This enables `sandbox.list` RPC to iterate all registered sandboxes via `registry.names()` and return `Vec<SandboxInfo>` with name, kind, and root_path. Other sandbox operations (exec, read_file, write_file, create_dir, read_dir, metadata) still use `registry.default()` for backward compatibility.
+
+Control plane (`control_plane/core.rs`) also updated to create a minimal `SandboxRegistry` with just the "local" sandbox registered.
+
 ## Related
 - [[agent-server-control-data-plane]]
 - [[vol-llm-agent-protocol-crate]]
@@ -105,3 +112,4 @@ The `agent-server` deployment lives under `deploy/argocd/manifests/workloads/age
 - [[task-4-quality-issues-cleanup]]
 - [[agent-server-data-plane-snapshot-command]]
 - [[agent-server-control-router-mvp]]
+- [[sandboxes-tab-frontend]]
