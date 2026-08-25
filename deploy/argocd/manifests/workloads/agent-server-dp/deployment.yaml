@@ -93,6 +93,9 @@ spec:
               mountPath: /tmp
             - name: logs
               mountPath: /app/logs
+            - name: ssh-key
+              mountPath: /app/.ssh
+              readOnly: true
           env:
             - name: OTEL_SERVICE_NAME
               value: "agent-server-dp"
@@ -167,3 +170,7 @@ spec:
           emptyDir: {}
         - name: logs
           emptyDir: {}
+        - name: ssh-key
+          secret:
+            secretName: ansible-ssh-key
+            defaultMode: 0644
