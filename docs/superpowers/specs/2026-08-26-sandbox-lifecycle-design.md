@@ -287,8 +287,8 @@ impl SandboxManager {
 1. `create(profile)` looks up the spec, routes to the correct provider, creates instance, stores record
 2. `get(id)` looks up record, routes to correct provider, returns sandbox handle
 3. Lifecycle methods validate state transitions before delegating to provider
-4. `default()` returns the first sandbox if only one exists, or creates a fresh TmpSandbox
-5. `register_instance()` allows backward compat (e.g., `LocalSandbox` registered at server startup)
+4. `default()` returns the first sandbox if exactly one exists; if zero or multiple exist, creates a fresh TmpSandbox with a random `sub_dir`
+5. `register_instance()` allows backward compat (e.g., `LocalSandbox` registered at server startup). Assumes the sandbox is already in `Running` state; stores the record with `status: Running`
 
 ## Provider Implementations
 
