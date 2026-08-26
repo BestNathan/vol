@@ -4,10 +4,12 @@
 //! Implementations: LocalSandbox (local directory), SSHSandbox (remote host via SSH).
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use ulid::Ulid;
 
 #[cfg(feature = "firecracker")]
 pub mod firecracker;
@@ -18,6 +20,58 @@ pub mod ssh;
 pub mod tmp;
 #[cfg(feature = "wasm")]
 pub mod wasm;
+
+/// Stable instance identifier, distinct from profile name.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SandboxId(String);
+
+impl SandboxId {
+    pub fn new() -> Self {
+        Self(format!("sb_{}", Ulid::new()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for SandboxId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Default for SandboxId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Explicit lifecycle states.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SandboxStatus {
+    Creating,
+    Created,
+    Starting,
+    Running,
+    Pausing,
+    Paused,
+    Stopping,
+    Stopped,
+    Destroying,
+    Destroyed,
+    Failed,
+}
+
+/// Discoverable backend capabilities.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SandboxCapabilities {
+    pub persistent: bool,
+    pub pausable: bool,
+    pub stoppable: bool,
+    pub destroyable: bool,
+}
 
 /// Reference to a sandbox instance.
 pub type SandboxRef = Arc<dyn Sandbox>;
@@ -215,6 +269,15 @@ pub enum SandboxError {
 
     #[error("Config error: {0}")]
     Config(String),
+
+    #[error("Sandbox not found: {0}")]
+    NotFound(String),
+
+    #[error("Invalid state transition: {from:?} -> {to:?}")]
+    InvalidTransition {
+        from: SandboxStatus,
+        to: SandboxStatus,
+    },
 }
 
 pub type SandboxResult<T> = Result<T, SandboxError>;
