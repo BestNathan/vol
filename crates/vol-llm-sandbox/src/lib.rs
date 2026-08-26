@@ -17,9 +17,12 @@ pub mod local;
 pub mod registry;
 #[cfg(feature = "ssh")]
 pub mod ssh;
+pub mod store;
 pub mod tmp;
 #[cfg(feature = "wasm")]
 pub mod wasm;
+
+pub use store::{InMemorySandboxStore, SandboxFilter, SandboxRecord, SandboxStore};
 
 /// Stable instance identifier, distinct from profile name.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
