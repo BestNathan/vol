@@ -74,19 +74,29 @@ pub async fn load_dir(
 
         let sandbox: Arc<dyn vol_llm_sandbox::Sandbox> = if let Some(ref name) = config.sandbox_ref
         {
-            registry.get(name).ok_or_else(|| {
-                CliToolError::Config(format!(
-                    "cli-tool `{}` references unknown sandbox `{}`",
-                    config.name, name
-                ))
-            })?
+            match registry.get(name) {
+                Some(sb) => sb,
+                None => {
+                    tracing::warn!(
+                        cli_tool = %config.name,
+                        sandbox = %name,
+                        "skipping cli-tool: referenced sandbox is unavailable (failed to load or connect)"
+                    );
+                    continue;
+                }
+            }
         } else if let Some(sb_cfg) = config.sandbox.clone() {
-            SandboxRegistry::build_sandbox(sb_cfg).await.map_err(|e| {
-                CliToolError::Config(format!(
-                    "cli-tool `{}` inline sandbox build failed: {e}",
-                    config.name
-                ))
-            })?
+            match SandboxRegistry::build_sandbox(sb_cfg).await {
+                Ok(sb) => sb,
+                Err(e) => {
+                    tracing::warn!(
+                        cli_tool = %config.name,
+                        error = %e,
+                        "skipping cli-tool: inline sandbox build failed"
+                    );
+                    continue;
+                }
+            }
         } else {
             unreachable!("validate() guarantees one of sandbox/sandbox_ref");
         };
@@ -135,7 +145,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_dir_fails_fast_on_unknown_sandbox_ref() {
+    async fn load_dir_skips_unknown_sandbox_ref() {
         let dir = tempdir().unwrap();
         fs::write(
             dir.path().join("t.toml"),
@@ -153,12 +163,12 @@ mod tests {
         let mut registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
         registry.register("local", Arc::new(LocalSandbox::new(None)));
 
-        let err = load_dir(dir.path(), &registry)
-            .await
-            .err()
-            .unwrap()
-            .to_string();
-        assert!(err.contains("no-such-sandbox"), "unexpected: {err}");
+        // Should succeed but skip the tool with missing sandbox
+        let tools = load_dir(dir.path(), &registry).await.unwrap();
+        assert!(
+            tools.is_empty(),
+            "tool with missing sandbox should be skipped"
+        );
     }
 
     #[tokio::test]
