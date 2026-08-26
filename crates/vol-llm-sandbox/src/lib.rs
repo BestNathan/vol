@@ -14,7 +14,9 @@ use ulid::Ulid;
 #[cfg(feature = "firecracker")]
 pub mod firecracker;
 pub mod local;
+pub mod provider;
 pub mod registry;
+pub mod spec;
 #[cfg(feature = "ssh")]
 pub mod ssh;
 pub mod store;
@@ -22,6 +24,8 @@ pub mod tmp;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
+pub use provider::{BackendSandboxRef, SandboxInfo, SandboxProvider};
+pub use spec::{SandboxProviderConfig, SandboxSpec};
 pub use store::{InMemorySandboxStore, SandboxFilter, SandboxRecord, SandboxStore};
 
 /// Stable instance identifier, distinct from profile name.
