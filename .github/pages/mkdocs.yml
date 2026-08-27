@@ -5,6 +5,10 @@
 site_name: Vol Wiki
 site_url: https://bestnathan.github.io/vol/
 repo_url: https://github.com/BestNathan/vol
+# copy-to-llm resolves the exact source from the rendered edit action before
+# falling back to route inference. Keep this explicit because Pages uses
+# directory URLs while the wiki sources are flat Markdown files.
+edit_uri: edit/main/docs/wiki/
 
 # Content lives in docs/wiki; this config dir (.github/pages) is kept out of
 # docs/ so the wiki stays pure content (wiki-ingest / Lark mirror unaffected).
@@ -21,6 +25,7 @@ theme:
     - search.suggest
     - search.highlight
     - content.code.copy
+    - content.action.edit
 
 plugins:
   # Resolves [[page]] / [[page|alias]] / [[page#heading]] across the whole
@@ -33,8 +38,8 @@ plugins:
   # Adds page-level AI handoff actions: copy Markdown, copy/view the raw
   # Markdown URL, and open the current page in ChatGPT or Claude.
   - copy-to-llm:
-      # docs_dir is docs/wiki while Pages is hosted below /vol. Both values
-      # are required so every rendered route maps to its canonical source.
+      # Fallback mapping used only when an edit action is unavailable.
+      # edit_uri above is the canonical resolver for directory-style URLs.
       repo_url: https://raw.githubusercontent.com/BestNathan/vol/main/docs/wiki
       base_path: /vol
       minify: true

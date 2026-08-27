@@ -6,10 +6,12 @@ on:
     paths:
       - 'docs/wiki/**'
       - '.github/pages/**'
+      - '.github/workflows/deploy-wiki-pages.yml'
   pull_request:
     paths:
       - 'docs/wiki/**'
       - '.github/pages/**'
+      - '.github/workflows/deploy-wiki-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -54,6 +56,15 @@ jobs:
 
       - name: Build wiki site (strict)
         run: mkdocs build --strict --config-file .github/pages/mkdocs.yml
+
+      # copy-to-llm prefers the rendered edit link over inferring a Markdown
+      # path from MkDocs' directory-style URLs. Guard both flat and nested pages.
+      - name: Verify AI contextual source links
+        run: |
+          grep -Fq 'https://github.com/BestNathan/vol/edit/main/docs/wiki/log.md' \
+            .github/pages/site/log/index.html
+          grep -Fq 'https://github.com/BestNathan/vol/edit/main/docs/wiki/concepts/tool-registry.md' \
+            .github/pages/site/concepts/tool-registry/index.html
 
       - uses: actions/upload-pages-artifact@v3
         with:
