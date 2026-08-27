@@ -1,5 +1,11 @@
 # Change Log
 
+## [2026-08-27] fix | MkDocs canonical Markdown source links
+- Updated sources: [[mkdocs-ai-contextual-menu]] (documented directory-URL failure and edit-link resolution)
+- Updated index: refreshed the source summary and latest-change description
+- Cross-references added: 0
+- Changes: Fixed Copy Markdown/Open in ChatGPT/Open in Claude URLs that mapped `/vol/log/` to the nonexistent `docs/wiki/log/index.md`. Added explicit `edit_uri: edit/main/docs/wiki/` plus Material `content.action.edit`, so copy-to-llm converts the exact rendered edit link to raw GitHub Markdown before using route inference. Added Pages build regressions for flat `log.md` and nested `concepts/tool-registry.md` sources.
+
 ## [2026-08-27] ingest | MkDocs AI Contextual Menu
 - Created sources: [[mkdocs-ai-contextual-menu]]
 - Updated entities: [[vol-repository]] (GitHub Pages AI handoff actions and canonical Markdown routing; source_count 4->5)

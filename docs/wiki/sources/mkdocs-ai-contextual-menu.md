@@ -23,9 +23,9 @@ ChatGPT or Claude conversation that points to the current page.
 - `mkdocs-copy-to-llm==0.2.10` is pinned for reproducible Pages builds.
 - Every page provides Copy page, Copy Markdown link, View as Markdown, Open in ChatGPT,
   and Open in Claude actions.
-- The raw source root is
-  `https://raw.githubusercontent.com/BestNathan/vol/main/docs/wiki`.
-- `base_path: /vol` strips the project Pages prefix before resolving the source path.
+- An explicit `edit_uri: edit/main/docs/wiki/` and Material edit action expose the exact
+  source path for every rendered page.
+- The raw source root plus `base_path: /vol` remain a fallback when no edit action exists.
 - Analytics is explicitly disabled; production assets remain minified.
 - The Material theme language is English, matching the repository documentation.
 
@@ -39,11 +39,15 @@ The primary copy action fetches the canonical Markdown source and copies it with
 navigation or theme chrome. Secondary actions expose the raw URL or create a new ChatGPT or
 Claude conversation with a prompt asking the assistant to read that public Markdown URL.
 
-Because the Pages site is hosted at `/vol/` while the Markdown files live below
-`docs/wiki/`, the plugin must use both the nested raw repository URL and `base_path: /vol`.
-Without that mapping, a rendered route such as `/vol/concepts/tool-registry/` would resolve
-to a nonexistent repository-root path instead of
-`docs/wiki/concepts/tool-registry.md`.
+The initial configuration relied on route inference. MkDocs renders flat source files such
+as `log.md` as directory URLs such as `/vol/log/`; the plugin therefore inferred the
+nonexistent `docs/wiki/log/index.md`. Nested pages had the same ambiguity.
+
+The fix exposes MkDocs' exact source location through
+`edit_uri: edit/main/docs/wiki/` and Material's `content.action.edit` feature. The plugin
+finds that edit link first and converts it directly to the canonical raw GitHub URL. The raw
+repository root and `base_path: /vol` remain defensive fallbacks rather than the primary
+resolver.
 
 ## Entities Mentioned
 
@@ -58,5 +62,5 @@ integration recorded as a source.
 
 - ChatGPT and Claude actions pass the public Markdown URL rather than embedding the full page
   in a query string.
-- The Pages pull-request build remains the integration gate for plugin installation, strict
-  MkDocs rendering, assets, and link resolution.
+- The Pages pull-request build verifies generated edit links for both `log.md` and the
+  nested `concepts/tool-registry.md` page, in addition to strict MkDocs rendering.

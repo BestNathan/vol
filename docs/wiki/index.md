@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-08-27 (GitHub Pages AI contextual menu: copy/view Markdown and open pages in ChatGPT or Claude)
+Last updated: 2026-08-27 (fixed canonical Markdown resolution for MkDocs directory URLs)
 
 ## Entities
 
@@ -105,7 +105,7 @@ Last updated: 2026-08-27 (GitHub Pages AI contextual menu: copy/view Markdown an
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[mkdocs-ai-contextual-menu]] | GitHub Pages AI handoff integration: pinned MkDocs plugin adds copy-page Markdown, canonical Markdown URL, raw view, and ChatGPT/Claude actions with `/vol` to `docs/wiki` path mapping | active | 2026-08-27 |
+| [[mkdocs-ai-contextual-menu]] | GitHub Pages AI handoff integration with copy/view Markdown and ChatGPT/Claude actions; explicit MkDocs edit links resolve canonical flat and nested source files, with CI regression coverage | active | 2026-08-27 |
 | [[sandboxes-tab-frontend]] | Sandboxes tab in React frontend: SandboxHandler refactored to accept SandboxRegistry (lists all registered sandboxes via sandbox.list), SandboxesPanel with kind-badge colors, new RPC method; 10 backend + 150 frontend tests pass | active | 2026-08-25 |
 | [[pipeline-removal-from-main]] | Volatility pipeline removed from main: advice agent + 12 pipeline crates deleted, vol-tracing/vol-observability renamed to vol-llm-tracing/vol-llm-observability, pipeline infra/docs stripped; pipeline preserved on the archive/volatility-pipeline branch; wiki surgery (tdengine entity deleted, observability entity renamed, dead links repaired) | active | 2026-08-21 |
 | [[readme-restructure]] | README restructured to pure agent six-section layout (agent system / architecture / project structure / install & deploy / AI workflow / tools & commands); volatility pipeline not mentioned per follow-up decision; stale content fixed (make→just, vol-llm-ui deprecated, crate table updated, ArgoCD primary); lean overview style linking to wiki concepts | active | 2026-08-21 |
