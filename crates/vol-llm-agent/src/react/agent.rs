@@ -723,11 +723,6 @@ impl ReActAgent {
                             let sandbox = registry
                                 .acquire(&sandbox_name)
                                 .unwrap_or_else(|| registry.default());
-                            // Bind sandbox metadata so TmpSandbox can set
-                            // its sub_dir (e.g. /tmp/{agent_id}/ for debugging)
-                            let mut meta = std::collections::HashMap::new();
-                            meta.insert("sub_dir".to_string(), run_ctx.config.agent_id.clone());
-                            sandbox.bind_metadata(&meta);
                             sandbox
                         } else {
                             match &sandbox {

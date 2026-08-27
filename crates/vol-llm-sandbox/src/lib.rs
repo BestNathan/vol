@@ -111,32 +111,18 @@ pub type SandboxRef = Arc<dyn Sandbox>;
 /// `tokio::sync::RwLock`, etc.).
 #[async_trait]
 pub trait Sandbox: Send + Sync {
+    /// Stable instance identifier.
+    fn id(&self) -> &SandboxId;
+
     /// Sandbox type identifier: "local", "ssh", "firecracker", "wasm".
     fn kind(&self) -> &str;
 
-    /// Registry name, e.g. "local", "devbox".
-    fn name(&self) -> &str;
-
-    /// Bind runtime metadata before [`start`].
-    ///
-    /// Called once after acquisition and before the first [`start`] call.
-    /// Default implementation is a no-op. Implementations can override to
-    /// extract relevant keys (e.g. `agent_id` for [`TmpSandbox`]).
-    ///
-    /// Common keys provided by the agent runtime:
-    /// - `agent_id` — the agent's unique identifier
-    /// - `agent_name` — the agent's human-readable name
-    fn bind_metadata(&self, _metadata: &std::collections::HashMap<String, String>) {}
-
-    /// Initialize the sandbox: create directories, establish connections, etc.
-    /// Idempotent — calling multiple times is safe.
-    async fn start(&self) -> SandboxResult<()>;
-
-    /// Clean up the sandbox: remove temp dirs, disconnect sessions, etc.
-    async fn cleanup(&self) -> SandboxResult<()>;
+    /// Current lifecycle status.
+    fn status(&self) -> SandboxStatus;
 
     /// Absolute root path of the sandbox. All file operations are scoped to this.
-    fn root_path(&self) -> &Path;
+    /// Returns None if the sandbox is not yet initialized or has been destroyed.
+    fn root_path(&self) -> Option<&Path>;
 
     /// Validate a **relative** path and resolve it to an absolute path within
     /// `root_path()`. Returns `PathTraversal` if the resolved path escapes the root.

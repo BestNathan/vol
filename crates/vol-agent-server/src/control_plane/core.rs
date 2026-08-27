@@ -47,10 +47,6 @@ impl ControlPlaneServerCore {
 
         let local_sandbox: Arc<dyn vol_llm_sandbox::Sandbox> =
             Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None));
-        local_sandbox
-            .start()
-            .await
-            .map_err(|e| format!("failed to start sandbox: {e}"))?;
         let mut sandbox_registry = vol_llm_sandbox::registry::SandboxRegistry::load(
             std::path::Path::new("/tmp/vol-control-plane-sandboxes"),
         )

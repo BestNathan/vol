@@ -729,7 +729,11 @@ impl ExecutableTool for GlobTool {
         let needs_size = params.with_metadata;
         let mut results: Vec<(String, String, Option<u64>, Option<u64>, FileType)> = Vec::new();
         let mut dirs_to_visit: Vec<std::path::PathBuf> = vec![resolved_root.clone()];
-        let workspace_root = context.sandbox.root_path().to_path_buf();
+        let workspace_root = context
+            .sandbox
+            .root_path()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_default();
 
         while let Some(dir) = dirs_to_visit.pop() {
             let entries = match context.sandbox.read_dir(&dir).await {

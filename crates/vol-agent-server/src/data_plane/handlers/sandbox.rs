@@ -60,9 +60,12 @@ impl DomainHandler for SandboxHandler {
                     .into_iter()
                     .filter_map(|name| {
                         self.registry.get(name).map(|sb| SandboxInfo {
-                            name: sb.name().to_string(),
+                            name: sb.id().to_string(),
                             kind: sb.kind().to_string(),
-                            root_path: sb.root_path().to_string_lossy().to_string(),
+                            root_path: sb
+                                .root_path()
+                                .map(|p| p.to_string_lossy().to_string())
+                                .unwrap_or_default(),
                         })
                     })
                     .collect();
