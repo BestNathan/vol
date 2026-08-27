@@ -10,12 +10,9 @@ metadata:
 data:
   ssh-dev.toml: 'name = "ssh-dev"
 
-    type = "ssh"
+    provider = "ssh"
 
     work_dir = "/tmp/sandbox-agent"
-
-
-    [ssh]
 
     host = "192.168.2.106"
 
@@ -23,12 +20,8 @@ data:
 
     user = "root"
 
-    identity_file = "/app/.ssh/id_ed25519"
+    key_path = "/app/.ssh/id_ed25519"
 
     host_key = "SHA256:8Y3g9hVzSz+KhN4oyodOoP4a+UOMUM0j3C9+CSDB1Ek="
-
-    idle_timeout_secs = 300
-
-    connect_timeout_secs = 10
 
     '

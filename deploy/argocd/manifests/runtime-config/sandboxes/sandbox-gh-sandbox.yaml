@@ -10,7 +10,7 @@ metadata:
 data:
   gh-sandbox.toml: 'name = "gh-sandbox"
 
-    type = "local"
+    provider = "local"
 
     work_dir = "/tmp"
 

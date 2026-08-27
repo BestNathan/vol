@@ -10,7 +10,7 @@ metadata:
 data:
   local-for-cli.toml: 'name = "local-for-cli"
 
-    type = "local"
+    provider = "local"
 
     work_dir = "/tmp"
 
