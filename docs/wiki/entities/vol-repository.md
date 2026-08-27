@@ -1,17 +1,17 @@
 ---
 type: entity
 category: product
-tags: [repository, rust, cargo-workspace, agent, llm, gitops]
+tags: [repository, rust, cargo-workspace, agent, llm, gitops, documentation, mkdocs]
 created: 2026-05-19
-updated: 2026-08-21
-source_count: 4
+updated: 2026-08-27
+source_count: 5
 ---
 
 # vol Repository
 
 **Category:** Rust Cargo workspace — LLM agent platform (volatility pipeline removed 2026-08-21)
 
-**Related:** [[claude-md-project-overview]], [[vol-llm-ui-crate]], [[vol-llm-agent-crate]], [[vol-llm-agents-crate]], [[vol-llm-agent-protocol-crate]], [[vol-llm-mcp-crate]], [[vol-mcp-servers-crate]]
+**Related:** [[mkdocs-ai-contextual-menu]], [[claude-md-project-overview]], [[vol-llm-ui-crate]], [[vol-llm-agent-crate]], [[vol-llm-agents-crate]], [[vol-llm-agent-protocol-crate]], [[vol-llm-mcp-crate]], [[vol-mcp-servers-crate]]
 
 ## Overview
 
@@ -28,6 +28,7 @@ React web frontend. The former Deribit volatility monitoring pipeline was remove
 - Agent backend service: `crates/vol-agent-server`
 - Command entry point: `justfile` recipes (no Makefile)
 - Project wiki: `docs/wiki`
+- GitHub Pages wiki: MkDocs Material with page-level AI actions for copying Markdown, viewing or copying canonical raw Markdown URLs, and opening the page in ChatGPT or Claude [[mkdocs-ai-contextual-menu]]
 - Superpowers artifacts: `docs/superpowers/` (requirement / architectures / specs / plans)
 - Kubernetes manifests: `deploy/argocd/` self-contained ArgoCD GitOps manifests (primary) [[argocd-gitops-deployment]]; `k8s/` legacy/manual, deprecated
 - Cargo mirror config for Docker Rust builds: `.cargo/`
@@ -49,6 +50,7 @@ React web frontend. The former Deribit volatility monitoring pipeline was remove
 
 ## Timeline
 
+- **2026-08-27**: Added an AI contextual menu to every GitHub Pages wiki page: copy page Markdown, copy/view the canonical Markdown URL, and open the page in ChatGPT or Claude; the integration pins `mkdocs-copy-to-llm` and validates nested `/vol` → `docs/wiki` path mapping [[mkdocs-ai-contextual-menu]]
 - **2026-08-21**: Volatility pipeline removed from `main` — advice module and 12 pipeline crates deleted (crate list in [[pipeline-removal-from-main]]), `vol-tracing`→`vol-llm-tracing` and `vol-observability`→`vol-llm-observability` renamed, pipeline infra/docs deleted; the pipeline lives on the `archive/volatility-pipeline` branch [[pipeline-removal-from-main]]
 - **2026-08-21**: README restructured to an agent-only six-section layout (agent system / architecture / project structure / install & deploy / AI workflow / tools & commands); volatility pipeline mentions removed entirely [[readme-restructure]]
 - **2026-06-16**: Added self-contained ArgoCD App-of-Apps GitOps deployment tree under `deploy/argocd/` plus MCP image build workflow; later refactored into `runtime-config` (namespace + shared .agents ConfigMaps) and `workloads` child Applications [[argocd-gitops-deployment]]
@@ -56,6 +58,7 @@ React web frontend. The former Deribit volatility monitoring pipeline was remove
 
 ## Related
 
+- [[mkdocs-ai-contextual-menu]]
 - [[claude-md-project-overview]]
 - [[readme-restructure]]
 - [[vol-llm-ui-crate]]

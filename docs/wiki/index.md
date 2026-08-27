@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-08-27 (sandbox lifecycle management refactor: SandboxManager, SandboxProvider, SandboxStore added; 98%+ test coverage)
+Last updated: 2026-08-27 (GitHub Pages AI contextual menu: copy/view Markdown and open pages in ChatGPT or Claude)
 
 ## Entities
 
@@ -23,7 +23,7 @@ Last updated: 2026-08-27 (sandbox lifecycle management refactor: SandboxManager,
 | [[vol-llm-agent-protocol-crate]] | Protocol, JSON-RPC transport, connection, handler, registry, and generic service abstraction layer | active | 2026-06-10 |
 | [[dashscope]] | DashScope API endpoint for Claude model access | active | 2026-05-04 |
 | [[vol-mcp-servers-crate]] | MCP server collection with multi-transport support; `docs-rs-mcp` is GitOps-managed and built by the MCP image workflow | active | 2026-06-16 |
-| [[vol-repository]] | Rust workspace: agent-only (volatility pipeline removed 2026-08-21, archived on `archive/volatility-pipeline`), six-section README, just recipes as command entry point, React `frontend/` (active web UI; vol-llm-ui deprecated), ArgoCD GitOps primary with `k8s/` legacy deprecated | active | 2026-08-21 |
+| [[vol-repository]] | Rust agent workspace with a six-section README, just-based commands, active React frontend, ArgoCD GitOps, and a MkDocs Pages wiki exposing page-level Markdown copy/view plus ChatGPT and Claude handoff actions | active | 2026-08-27 |
 | [[vol-llm-observability-crate]] | Consolidated observability library (LoggingPlugin, MetricsPlugin, /metrics endpoint, OTel init; renamed from vol-observability 2026-08-21); agent file logs rotate hourly into `logs/` instead of the process CWD (2026-08-19) | active | 2026-08-21 |
 | [[vol-llm-mcp-crate]] | MCP Client protocol layer for ReAct Agent — config parsing, McpManager lifecycle, tool/resource/prompt discovery | active | 2026-05-13 |
 | [[playwright-mcp-service]] | Standalone in-cluster MCP service exposing Playwright browser automation (24 browser_* tools) on port 8931, referenced via http URL in mcp-config; hardened (ro rootfs, non-root, dropped caps) | active | 2026-08-13 |
@@ -105,6 +105,7 @@ Last updated: 2026-08-27 (sandbox lifecycle management refactor: SandboxManager,
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
+| [[mkdocs-ai-contextual-menu]] | GitHub Pages AI handoff integration: pinned MkDocs plugin adds copy-page Markdown, canonical Markdown URL, raw view, and ChatGPT/Claude actions with `/vol` to `docs/wiki` path mapping | active | 2026-08-27 |
 | [[sandboxes-tab-frontend]] | Sandboxes tab in React frontend: SandboxHandler refactored to accept SandboxRegistry (lists all registered sandboxes via sandbox.list), SandboxesPanel with kind-badge colors, new RPC method; 10 backend + 150 frontend tests pass | active | 2026-08-25 |
 | [[pipeline-removal-from-main]] | Volatility pipeline removed from main: advice agent + 12 pipeline crates deleted, vol-tracing/vol-observability renamed to vol-llm-tracing/vol-llm-observability, pipeline infra/docs stripped; pipeline preserved on the archive/volatility-pipeline branch; wiki surgery (tdengine entity deleted, observability entity renamed, dead links repaired) | active | 2026-08-21 |
 | [[readme-restructure]] | README restructured to pure agent six-section layout (agent system / architecture / project structure / install & deploy / AI workflow / tools & commands); volatility pipeline not mentioned per follow-up decision; stale content fixed (make→just, vol-llm-ui deprecated, crate table updated, ArgoCD primary); lean overview style linking to wiki concepts | active | 2026-08-21 |
