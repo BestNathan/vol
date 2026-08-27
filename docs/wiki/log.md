@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-08-27] ingest | MkDocs AI Contextual Menu
+- Created sources: [[mkdocs-ai-contextual-menu]]
+- Updated entities: [[vol-repository]] (GitHub Pages AI handoff actions and canonical Markdown routing; source_count 4->5)
+- Updated index: refreshed vol-repository summary and added the new source entry
+- Cross-references added: 4
+- Changes: Pinned mkdocs-copy-to-llm 0.2.10 and enabled page-level copy Markdown, copy Markdown URL, raw Markdown view, Open in ChatGPT, and Open in Claude actions. Configured the raw source root as docs/wiki and stripped the /vol Pages prefix so rendered routes resolve to canonical source files. Analytics remains disabled, assets are minified, and the Material UI language is aligned with the English documentation.
+
 ## [2026-08-27] ingest | Sandbox Lifecycle Management Design (Issue #59)
 - Created sources: [[sandbox-lifecycle-management-design]]
 - Updated entities: [[vol-llm-sandbox-crate]] (complete architecture overhaul: SandboxManager, SandboxProvider, SandboxStore, SandboxId, SandboxStatus, SandboxCapabilities; all implementations updated; source_count 4->5)
