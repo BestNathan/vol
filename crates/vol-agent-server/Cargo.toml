@@ -13,6 +13,7 @@ workspace = true
 
 [features]
 test-utils = []
+ssh = ["vol-llm-sandbox/ssh"]
 
 [dependencies]
 base64 = "0.22"

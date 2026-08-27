@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::registry::SshConfig;
 use crate::{
@@ -29,7 +29,6 @@ pub use self::session::SshSandboxConfig;
 /// activity has occurred within the configured window.
 pub struct SSHSandbox {
     id: SandboxId,
-    name: String,
     root_path: PathBuf,
     remote_work_dir: String,
     session: Arc<session::SshSession>,
@@ -53,7 +52,7 @@ impl SSHSandbox {
         let idle_timeout = Duration::from_secs(ssh_config.idle_timeout_secs);
 
         let config = Arc::new(session::SshSandboxConfig {
-            name: name.clone(),
+            name,
             work_dir: remote_work_dir.clone(),
             host: ssh_config.host,
             port: ssh_config.port,
@@ -97,7 +96,6 @@ impl SSHSandbox {
 
         Ok(Self {
             id: SandboxId::new(),
-            name,
             root_path: PathBuf::from(&remote_work_dir),
             remote_work_dir,
             session,
