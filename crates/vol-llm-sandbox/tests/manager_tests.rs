@@ -298,3 +298,103 @@ async fn test_multiple_providers() {
     assert_eq!(sandbox1.kind(), "local");
     assert_eq!(sandbox2.kind(), "local");
 }
+
+#[tokio::test]
+async fn test_load_profiles_from_toml() {
+    use std::fs;
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sandbox_dir = temp_dir.path();
+
+    // Create test TOML files
+    let local_config = r#"
+name = "test-local"
+provider = "local"
+work_dir = "/tmp/test"
+"#;
+    fs::write(sandbox_dir.join("local.toml"), local_config).unwrap();
+
+    let tmp_config = r#"
+name = "test-tmp"
+provider = "tmp"
+sub_dir = "test-subdir"
+"#;
+    fs::write(sandbox_dir.join("tmp.toml"), tmp_config).unwrap();
+
+    let manager = SandboxManager::new();
+
+    // Register providers first
+    manager
+        .register_provider(Arc::new(MockProvider::new("local")))
+        .await;
+    manager
+        .register_provider(Arc::new(MockProvider::new("tmp")))
+        .await;
+
+    // Load profiles from TOML files
+    manager.load_profiles(sandbox_dir).await.unwrap();
+
+    // Create instances from the loaded profiles
+    manager.create("test-local").await.unwrap();
+    manager.create("test-tmp").await.unwrap();
+
+    // Verify instances were created
+    let list = manager.list(None).await.unwrap();
+    assert_eq!(list.len(), 2);
+
+    let profiles: Vec<_> = list.iter().map(|s| s.profile.clone()).collect();
+    assert!(profiles.contains(&"test-local".to_string()));
+    assert!(profiles.contains(&"test-tmp".to_string()));
+}
+
+#[tokio::test]
+async fn test_load_profiles_with_ssh() {
+    use std::fs;
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sandbox_dir = temp_dir.path();
+
+    let ssh_config = r#"
+name = "test-ssh"
+provider = "ssh"
+work_dir = "/home/user"
+host = "192.168.1.100"
+user = "developer"
+port = 2222
+"#;
+    fs::write(sandbox_dir.join("ssh.toml"), ssh_config).unwrap();
+
+    let manager = SandboxManager::new();
+
+    // Register SSH provider
+    manager
+        .register_provider(Arc::new(MockProvider::new("ssh")))
+        .await;
+
+    // Load profiles from TOML files
+    manager.load_profiles(sandbox_dir).await.unwrap();
+
+    // Create instance from the loaded profile
+    manager.create("test-ssh").await.unwrap();
+
+    let list = manager.list(None).await.unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].profile, "test-ssh");
+    assert_eq!(list[0].kind, "ssh");
+}
+
+#[tokio::test]
+async fn test_load_profiles_empty_directory() {
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sandbox_dir = temp_dir.path();
+
+    let manager = SandboxManager::new();
+    manager.load_profiles(sandbox_dir).await.unwrap();
+
+    let list = manager.list(None).await.unwrap();
+    assert_eq!(list.len(), 0);
+}
