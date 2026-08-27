@@ -148,20 +148,23 @@ mod tests {
 
     #[async_trait]
     impl Sandbox for MockSandbox {
+        fn id(&self) -> &vol_llm_sandbox::SandboxId {
+            // Return a mock ID - in tests this is fine
+            static MOCK_ID: std::sync::OnceLock<vol_llm_sandbox::SandboxId> =
+                std::sync::OnceLock::new();
+            MOCK_ID.get_or_init(|| vol_llm_sandbox::SandboxId::new())
+        }
+
         fn kind(&self) -> &str {
             "mock"
         }
-        fn name(&self) -> &str {
-            "mock"
+
+        fn status(&self) -> vol_llm_sandbox::SandboxStatus {
+            vol_llm_sandbox::SandboxStatus::Running
         }
-        async fn start(&self) -> SandboxResult<()> {
-            Ok(())
-        }
-        async fn cleanup(&self) -> SandboxResult<()> {
-            Ok(())
-        }
-        fn root_path(&self) -> &Path {
-            Path::new("/")
+
+        fn root_path(&self) -> Option<&Path> {
+            Some(Path::new("/"))
         }
         fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {
             Ok(PathBuf::from(rel))

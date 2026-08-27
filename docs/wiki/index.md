@@ -1,6 +1,6 @@
 # Wiki Index
 
-Last updated: 2026-08-21 (volatility pipeline removed from main: tdengine entity deleted, vol-observability-crate renamed to vol-llm-observability-crate, crate references fixed, dead links repaired)
+Last updated: 2026-08-27 (sandbox lifecycle management refactor: SandboxManager, SandboxProvider, SandboxStore added; 98%+ test coverage)
 
 ## Entities
 
@@ -12,7 +12,7 @@ Last updated: 2026-08-21 (volatility pipeline removed from main: tdengine entity
 | [[vol-llm-task-crate]] | Task models and persistence stores, including SeaORM database store for SQLite and Postgres with compiled migrations | active | 2026-06-09 |
 | [[vol-agent-server-crate]] | Standalone server crate that composes DataPlaneServerCore/ControlPlaneServerCore routes and is deployed by the self-contained ArgoCD GitOps tree as `agent-server`; supports remote control-plane registration with heartbeat/reconnect | active | 2026-06-17 |
 | [[vol-llm-ui-crate]] | Shared UI state model. Web (Dioxus) DEPRECATED 2026-08 — React frontend/ is the active web UI. TUI + state maintained. | deprecated | 2026-08-06 |
-| [[vol-llm-sandbox-crate]] | Sandbox abstraction (Local/Tmp/SSH/Firecracker/Wasm), SandboxRegistry with pure-config loading, TmpSandbox with bind_metadata lifecycle; LocalSandbox timeout kill reworked to positive-pid kills (group kills kill the caller tree in sandboxes) | active | 2026-08-19 |
+| [[vol-llm-sandbox-crate]] | Sandbox lifecycle management: SandboxManager (orchestration), SandboxProvider (backend adapters), SandboxStore (metadata), SandboxId (stable identity), SandboxStatus (lifecycle states), SandboxCapabilities (capability discovery); implementations: Local/Tmp/SSH/Firecracker/Wasm; 98%+ test coverage | active | 2026-08-27 |
 | [[vol-llm-agent-crate]] | ReAct Agent orchestration crate with structured `AgentInput` multimodal run API and `[image]` display-text markers; AgentTool moved out to vol-llm-agent-tool, AgentLoader gained `get_by_id` | active | 2026-08-20 |
 | [[vol-llm-agents-crate]] | High-level agent implementations (coding, ppt, qa, wiki; advice agent removed 2026-08-21) with runnable MCP examples | active | 2026-08-21 |
 | [[vol-llm-core-crate]] | Core LLM interaction abstractions, including provider-neutral multipart message content and `[image]` display markers; coverage gate PASS 95.62% | stable | 2026-08-17 |
@@ -32,7 +32,10 @@ Last updated: 2026-08-21 (volatility pipeline removed from main: tdengine entity
 
 | Page | Summary | Status | Updated |
 |------|---------|--------|---------|
-| [[sandbox-lifecycle]] | Sandbox lifecycle: define→construct→register→acquire→bind→start→use→cleanup. Pure registry design with TmpSandbox default, bind_metadata for sub_dir | active | 2026-08-11 |
+| [[sandbox-lifecycle]] | Sandbox lifecycle management: explicit instance identity (SandboxId), lifecycle states (SandboxStatus), provider-based backend abstraction (SandboxProvider), unified orchestration (SandboxManager), capability discovery (SandboxCapabilities); state machine with validated transitions | active | 2026-08-27 |
+| [[provider-pattern]] | Backend adapter pattern: SandboxProvider trait separates backend-specific lifecycle from orchestration; each backend (Local/Tmp/SSH/Firecracker/Wasm) implements provider with capability declaration | active | 2026-08-27 |
+| [[lifecycle-state-machine]] | State machine pattern for sandbox lifecycle: explicit states (Creating/Running/Paused/Stopped/Destroyed/Failed) with validated transitions enforced by SandboxManager | active | 2026-08-27 |
+| [[capability-discovery]] | Runtime capability discovery: SandboxCapabilities exposes what operations each backend supports (persistent/pausable/stoppable/destroyable); UI/orchestration respects declared capabilities | active | 2026-08-27 |
 | [[test-tiers]] | Three-tier test split (unit `--lib` / integration `-E 'kind(test)'` / e2e `--ignored`) mapped to scenarios: pre-push runs changed-crate unit tests only, CI runs unit+integration+coverage; e2e tier landed — `#[ignore = "e2e: ..."]` marker convention, in-test env guards (clean skips), manual e2e.yml workflow + frontend Playwright in the PR gate; broken/ignored tests fixed, never `#[ignore]`d | active | 2026-08-19 |
 | [[cli-style-tool-pattern]] | Single `ExecutableTool` taking a CLI command string (`tool <subcommand> --flag value`): tokenizer + clap parser → typed command enum → delegation to underlying tools; `task` CLI and `fs` tool are the two implementations | active | 2026-08-16 |
 | [[agenttool-subagent-dispatch]] | Builtin `agent` tool dispatch semantics: by unique `AgentDef.id`, depth guard via caller `tool_config.agent.max_depth` (default 1 = one layer), parent/depth recorded on AgentDef and carried through ToolContext, sub-agent session persisted by name | active | 2026-08-20 |

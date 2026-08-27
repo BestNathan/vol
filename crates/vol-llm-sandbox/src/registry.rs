@@ -150,7 +150,6 @@ impl SandboxRegistry {
                     ssh_config,
                 )?;
                 let sandbox: Arc<dyn Sandbox> = Arc::new(sb);
-                sandbox.start().await?;
                 sandbox
             }
             other => {

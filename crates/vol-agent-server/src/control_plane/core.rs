@@ -36,7 +36,10 @@ pub struct ControlPlaneServerCore {
 }
 
 impl ControlPlaneServerCore {
-    pub async fn new(state: Arc<ControlPlaneState>) -> Result<Self, String> {
+    pub async fn new(
+        state: Arc<ControlPlaneState>,
+        working_dir: std::path::PathBuf,
+    ) -> Result<Self, String> {
         let mut handler_registry = HandlerRegistry::new();
         handler_registry.register(Arc::new(SystemHandler::new()))?;
         handler_registry.register(Arc::new(ControlHandler::new(state.clone())))?;
@@ -45,20 +48,30 @@ impl ControlPlaneServerCore {
         handler_registry.register(Arc::new(ClientHandler::new(state.clone())))?;
         handler_registry.register(Arc::new(RunHandler::new(state.clone())))?;
 
-        let local_sandbox: Arc<dyn vol_llm_sandbox::Sandbox> =
-            Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None));
-        local_sandbox
-            .start()
-            .await
-            .map_err(|e| format!("failed to start sandbox: {e}"))?;
-        let mut sandbox_registry = vol_llm_sandbox::registry::SandboxRegistry::load(
-            std::path::Path::new("/tmp/vol-control-plane-sandboxes"),
-        )
-        .await
-        .map_err(|e| format!("failed to load sandbox registry: {e}"))?;
-        sandbox_registry.register("local", local_sandbox);
+        // Create SandboxManager with providers
+        let sandbox_manager = Arc::new(vol_llm_sandbox::SandboxManager::new());
+        sandbox_manager
+            .register_provider(Arc::new(vol_llm_sandbox::local::LocalSandboxProvider))
+            .await;
+        sandbox_manager
+            .register_provider(Arc::new(vol_llm_sandbox::tmp::TmpSandboxProvider))
+            .await;
+        #[cfg(feature = "ssh")]
+        sandbox_manager
+            .register_provider(Arc::new(vol_llm_sandbox::ssh::SSHSandboxProvider::new()))
+            .await;
+
+        // Load sandbox profiles from .agents/sandboxes/ directory
+        let sandboxes_dir = working_dir.join(".agents/sandboxes");
+        if sandboxes_dir.exists() {
+            sandbox_manager
+                .load_profiles(&sandboxes_dir)
+                .await
+                .map_err(|e| format!("failed to load sandbox profiles: {e}"))?;
+        }
+
         handler_registry
-            .register(Arc::new(SandboxHandler::new(Arc::new(sandbox_registry))))
+            .register(Arc::new(SandboxHandler::new(sandbox_manager)))
             .map_err(|e| format!("failed to register SandboxHandler: {e}"))?;
 
         Ok(Self {
@@ -240,7 +253,9 @@ mod tests {
     #[tokio::test]
     async fn control_plane_server_core_registers_all_handlers() {
         let state = Arc::new(ControlPlaneState::new());
-        let core = super::ControlPlaneServerCore::new(state).await.unwrap();
+        let core = super::ControlPlaneServerCore::new(state, std::path::PathBuf::from("/tmp"))
+            .await
+            .unwrap();
         // Core doesn't expose handler_registry publicly, but construction succeeds
         // and we can verify state is wired
         assert!(core.state.nodes.list().is_empty());
@@ -249,7 +264,9 @@ mod tests {
     #[tokio::test]
     async fn control_plane_server_core_handle_unknown_operation() {
         let state = Arc::new(ControlPlaneState::new());
-        let core = super::ControlPlaneServerCore::new(state).await.unwrap();
+        let core = super::ControlPlaneServerCore::new(state, std::path::PathBuf::from("/tmp"))
+            .await
+            .unwrap();
         let msg = AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: "1".to_string(),
@@ -304,7 +321,9 @@ mod tests {
     #[tokio::test]
     async fn control_plane_server_core_handle_node_list() {
         let state = Arc::new(ControlPlaneState::new());
-        let core = super::ControlPlaneServerCore::new(state).await.unwrap();
+        let core = super::ControlPlaneServerCore::new(state, std::path::PathBuf::from("/tmp"))
+            .await
+            .unwrap();
         let msg = AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: "1".to_string(),

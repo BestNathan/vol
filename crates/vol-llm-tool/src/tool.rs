@@ -65,7 +65,7 @@ impl std::fmt::Debug for ToolContext {
             .field("messages", &self.messages)
             .field(
                 "sandbox",
-                &format_args!("{}:{}", self.sandbox.kind(), self.sandbox.name()),
+                &format_args!("{}:{}", self.sandbox.kind(), self.sandbox.id()),
             )
             .field("agent_def", &self.agent_def)
             .finish()
@@ -110,8 +110,12 @@ impl ToolContext {
         // strip the root prefix so the sandbox receives a relative path.
         // This keeps sandbox implementations consistent (all reject absolute).
         let relative = if rel.starts_with('/') {
-            let root = self.sandbox.root_path().to_string_lossy();
-            if rel.starts_with(root.as_ref()) && rel.len() > root.len() {
+            let root = self
+                .sandbox
+                .root_path()
+                .map(|p| p.to_string_lossy())
+                .unwrap_or_default();
+            if !root.is_empty() && rel.starts_with(root.as_ref()) && rel.len() > root.len() {
                 // Strip root prefix + trailing separator
                 let stripped = &rel[root.len()..];
                 stripped.trim_start_matches('/')

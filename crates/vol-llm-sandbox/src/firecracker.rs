@@ -457,7 +457,9 @@ impl FirecrackerPool {
 /// All [`Sandbox`] trait methods delegate to the inner [`SSHSandbox`].
 /// On drop, the VM is returned to the pool for asynchronous cleanup.
 pub struct FirecrackerSandbox {
+    id: SandboxId,
     name: String,
+    status: SandboxStatus,
     pool: Arc<FirecrackerPool>,
     handle: StdMutex<Option<FirecrackerVmHandle>>,
     root_path: PathBuf,
@@ -470,7 +472,9 @@ impl FirecrackerSandbox {
     /// or one of the file/exec methods).
     pub fn new(name: String, root_path: PathBuf, pool: Arc<FirecrackerPool>) -> Self {
         Self {
+            id: SandboxId::new(),
             name,
+            status: SandboxStatus::Running,
             pool,
             handle: StdMutex::new(None),
             root_path,
@@ -507,27 +511,20 @@ impl Drop for FirecrackerSandbox {
 
 #[async_trait]
 impl Sandbox for FirecrackerSandbox {
+    fn id(&self) -> &SandboxId {
+        &self.id
+    }
+
     fn kind(&self) -> &str {
         "firecracker"
     }
 
-    fn name(&self) -> &str {
-        &self.name
+    fn status(&self) -> SandboxStatus {
+        self.status
     }
 
-    async fn start(&self) -> SandboxResult<()> {
-        // Defer to first use. Just ensure connectivity works.
-        let _ = self.ssh().await?;
-        Ok(())
-    }
-
-    async fn cleanup(&self) -> SandboxResult<()> {
-        // Handled by Drop
-        Ok(())
-    }
-
-    fn root_path(&self) -> &Path {
-        &self.root_path
+    fn root_path(&self) -> Option<&Path> {
+        Some(&self.root_path)
     }
 
     fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {

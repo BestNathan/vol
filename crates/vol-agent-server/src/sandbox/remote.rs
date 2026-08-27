@@ -18,7 +18,7 @@ use vol_llm_agent_protocol::transport::jsonrpc::codec::{
 };
 use vol_llm_sandbox::{
     CommandOutput, CommandRequest, DirEntry, FileMetadata, FileType, Sandbox, SandboxError,
-    SandboxResult,
+    SandboxId, SandboxResult, SandboxStatus,
 };
 
 /// A `Sandbox` backed by a remote agent server via JSON-RPC/WebSocket.
@@ -26,6 +26,7 @@ use vol_llm_sandbox::{
 /// Created via `RemoteSandbox::connect(url)`. On drop, the background reader/writer
 /// tasks are cancelled via `CancellationToken`.
 pub struct RemoteSandbox {
+    id: SandboxId,
     #[allow(dead_code)]
     server_url: String,
     write_tx: mpsc::UnboundedSender<String>,
@@ -118,6 +119,7 @@ impl RemoteSandbox {
         });
 
         Ok(Self {
+            id: SandboxId::new(),
             server_url: server_url.to_string(),
             write_tx,
             inner,
@@ -165,22 +167,20 @@ impl RemoteSandbox {
 
 #[async_trait]
 impl Sandbox for RemoteSandbox {
+    fn id(&self) -> &SandboxId {
+        &self.id
+    }
+
     fn kind(&self) -> &str {
         "remote"
     }
-    fn name(&self) -> &str {
-        "remote"
+
+    fn status(&self) -> SandboxStatus {
+        SandboxStatus::Running
     }
 
-    async fn start(&self) -> SandboxResult<()> {
-        Ok(())
-    }
-    async fn cleanup(&self) -> SandboxResult<()> {
-        Ok(())
-    }
-
-    fn root_path(&self) -> &Path {
-        Path::new("")
+    fn root_path(&self) -> Option<&Path> {
+        Some(Path::new(""))
     }
 
     fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {
@@ -351,6 +351,7 @@ mod tests {
         });
 
         let sandbox = RemoteSandbox {
+            id: vol_llm_sandbox::SandboxId::new(),
             server_url: "ws://localhost:9999/test".into(),
             write_tx,
             inner,
@@ -373,6 +374,7 @@ mod tests {
         let bg = tokio::spawn(async {});
 
         let sandbox = RemoteSandbox {
+            id: vol_llm_sandbox::SandboxId::new(),
             server_url: "ws://localhost:9999/test".into(),
             write_tx,
             inner,
@@ -381,8 +383,8 @@ mod tests {
         };
 
         assert_eq!(sandbox.kind(), "remote");
-        assert_eq!(sandbox.name(), "remote");
-        assert_eq!(sandbox.root_path(), Path::new(""));
+        assert_eq!(sandbox.status(), vol_llm_sandbox::SandboxStatus::Running);
+        assert_eq!(sandbox.root_path(), Some(Path::new("")));
     }
 
     /// Verify that connect fails gracefully when no server is running.
@@ -463,8 +465,8 @@ mod tests {
 
         // Verify kind/name/root_path
         assert_eq!(sandbox.kind(), "remote");
-        assert_eq!(sandbox.name(), "remote");
-        assert_eq!(sandbox.root_path(), Path::new(""));
+        assert_eq!(sandbox.status(), vol_llm_sandbox::SandboxStatus::Running);
+        assert_eq!(sandbox.root_path(), Some(Path::new("")));
 
         // Give the WS server a moment to process
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;

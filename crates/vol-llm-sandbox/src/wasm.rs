@@ -12,12 +12,15 @@ use wasmtime_wasi::{DirPerms, FilePerms};
 
 use crate::registry::{WasmConfig, WasmModuleConfig};
 use crate::{
-    CommandOutput, DirEntry, FileMetadata, FileType, Sandbox, SandboxError, SandboxResult,
+    CommandOutput, DirEntry, FileMetadata, FileType, Sandbox, SandboxError, SandboxId,
+    SandboxResult, SandboxStatus,
 };
 
 /// Wasm sandbox — executes `.wasm` modules in an isolated WASI environment.
 pub struct WasmSandbox {
+    id: SandboxId,
     name: String,
+    status: SandboxStatus,
     work_dir: PathBuf,
     root_path: PathBuf,
     engine: Engine,
@@ -51,7 +54,9 @@ impl WasmSandbox {
         std::fs::create_dir_all(&work_dir).map_err(SandboxError::Io)?;
 
         Ok(Self {
+            id: SandboxId::new(),
             name,
+            status: SandboxStatus::Running,
             work_dir,
             root_path,
             engine,
@@ -69,27 +74,20 @@ impl WasmSandbox {
 
 #[async_trait]
 impl Sandbox for WasmSandbox {
+    fn id(&self) -> &SandboxId {
+        &self.id
+    }
+
     fn kind(&self) -> &str {
         "wasm"
     }
 
-    fn name(&self) -> &str {
-        &self.name
+    fn status(&self) -> SandboxStatus {
+        self.status
     }
 
-    async fn start(&self) -> SandboxResult<()> {
-        std::fs::create_dir_all(&self.work_dir).map_err(SandboxError::Io)
-    }
-
-    async fn cleanup(&self) -> SandboxResult<()> {
-        if self.work_dir.exists() {
-            std::fs::remove_dir_all(&self.work_dir).map_err(SandboxError::Io)?;
-        }
-        Ok(())
-    }
-
-    fn root_path(&self) -> &Path {
-        &self.root_path
+    fn root_path(&self) -> Option<&Path> {
+        Some(&self.root_path)
     }
 
     fn resolve_path(&self, rel: &str) -> SandboxResult<PathBuf> {

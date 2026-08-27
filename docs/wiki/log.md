@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-08-27] ingest | Sandbox Lifecycle Management Design (Issue #59)
+- Created sources: [[sandbox-lifecycle-management-design]]
+- Updated entities: [[vol-llm-sandbox-crate]] (complete architecture overhaul: SandboxManager, SandboxProvider, SandboxStore, SandboxId, SandboxStatus, SandboxCapabilities; all implementations updated; source_count 4->5)
+- Updated concepts: [[sandbox-lifecycle]] (complete rewrite: explicit instance identity, state machine, provider pattern, capability discovery; source_count 1->2)
+- Created concepts: [[provider-pattern]], [[lifecycle-state-machine]], [[capability-discovery]]
+- Updated index: Last updated date, vol-llm-sandbox-crate summary, sandbox-lifecycle summary, 3 new concept entries
+- Cross-references added: 12
+- Changes: Major refactor of sandbox abstraction (issue #59) — separates concerns into three layers: Sandbox (execution interface), SandboxProvider (backend adapter), SandboxManager (orchestration). Introduces stable instance identity (SandboxId, ULID-based), explicit lifecycle states (SandboxStatus with validated transitions), capability discovery (SandboxCapabilities), and unified orchestration (SandboxManager replacing SandboxRegistry). All sandbox implementations updated (Local/Tmp/SSH/Firecracker/Wasm). Configuration format updated (type→provider, SSH config flattened). 98%+ test coverage achieved (35 new tests). Quality workflow errors fixed (clippy-strict, unit tests, boundaries check all pass). PR #60 created with 11 commits.
+
 ## [2026-08-25] ingest | Sandboxes tab in web frontend
 - Created sources: [[sandboxes-tab-frontend]]
 - Updated entities: [[vol-llm-sandbox-crate]] (SandboxHandler refactor timeline entry; source_count 3->4), [[vol-agent-server-crate]] (SandboxHandler refactor section; source_count 18->19)

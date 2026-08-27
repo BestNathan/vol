@@ -4,20 +4,83 @@
 //! Implementations: LocalSandbox (local directory), SSHSandbox (remote host via SSH).
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use ulid::Ulid;
 
 #[cfg(feature = "firecracker")]
 pub mod firecracker;
 pub mod local;
+pub mod manager;
+pub mod provider;
 pub mod registry;
+pub mod spec;
 #[cfg(feature = "ssh")]
 pub mod ssh;
+pub mod store;
 pub mod tmp;
 #[cfg(feature = "wasm")]
 pub mod wasm;
+
+pub use manager::SandboxManager;
+pub use provider::{BackendSandboxRef, SandboxInfo, SandboxProvider};
+pub use spec::{SandboxProviderConfig, SandboxSpec};
+pub use store::{InMemorySandboxStore, SandboxFilter, SandboxRecord, SandboxStore};
+
+/// Stable instance identifier, distinct from profile name.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SandboxId(String);
+
+impl SandboxId {
+    pub fn new() -> Self {
+        Self(format!("sb_{}", Ulid::new()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for SandboxId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Default for SandboxId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Explicit lifecycle states.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SandboxStatus {
+    Creating,
+    Created,
+    Starting,
+    Running,
+    Pausing,
+    Paused,
+    Stopping,
+    Stopped,
+    Destroying,
+    Destroyed,
+    Failed,
+}
+
+/// Discoverable backend capabilities.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SandboxCapabilities {
+    pub persistent: bool,
+    pub pausable: bool,
+    pub stoppable: bool,
+    pub destroyable: bool,
+}
 
 /// Reference to a sandbox instance.
 pub type SandboxRef = Arc<dyn Sandbox>;
@@ -50,32 +113,18 @@ pub type SandboxRef = Arc<dyn Sandbox>;
 /// `tokio::sync::RwLock`, etc.).
 #[async_trait]
 pub trait Sandbox: Send + Sync {
+    /// Stable instance identifier.
+    fn id(&self) -> &SandboxId;
+
     /// Sandbox type identifier: "local", "ssh", "firecracker", "wasm".
     fn kind(&self) -> &str;
 
-    /// Registry name, e.g. "local", "devbox".
-    fn name(&self) -> &str;
-
-    /// Bind runtime metadata before [`start`].
-    ///
-    /// Called once after acquisition and before the first [`start`] call.
-    /// Default implementation is a no-op. Implementations can override to
-    /// extract relevant keys (e.g. `agent_id` for [`TmpSandbox`]).
-    ///
-    /// Common keys provided by the agent runtime:
-    /// - `agent_id` — the agent's unique identifier
-    /// - `agent_name` — the agent's human-readable name
-    fn bind_metadata(&self, _metadata: &std::collections::HashMap<String, String>) {}
-
-    /// Initialize the sandbox: create directories, establish connections, etc.
-    /// Idempotent — calling multiple times is safe.
-    async fn start(&self) -> SandboxResult<()>;
-
-    /// Clean up the sandbox: remove temp dirs, disconnect sessions, etc.
-    async fn cleanup(&self) -> SandboxResult<()>;
+    /// Current lifecycle status.
+    fn status(&self) -> SandboxStatus;
 
     /// Absolute root path of the sandbox. All file operations are scoped to this.
-    fn root_path(&self) -> &Path;
+    /// Returns None if the sandbox is not yet initialized or has been destroyed.
+    fn root_path(&self) -> Option<&Path>;
 
     /// Validate a **relative** path and resolve it to an absolute path within
     /// `root_path()`. Returns `PathTraversal` if the resolved path escapes the root.
@@ -215,6 +264,15 @@ pub enum SandboxError {
 
     #[error("Config error: {0}")]
     Config(String),
+
+    #[error("Sandbox not found: {0}")]
+    NotFound(String),
+
+    #[error("Invalid state transition: {from:?} -> {to:?}")]
+    InvalidTransition {
+        from: SandboxStatus,
+        to: SandboxStatus,
+    },
 }
 
 pub type SandboxResult<T> = Result<T, SandboxError>;

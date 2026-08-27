@@ -252,23 +252,27 @@ async fn test_html_reporter_empty_description() {
 fn test_local_sandbox_new_no_path() {
     let sandbox = LocalSandbox::new(None);
     // Path should contain "sandbox_" prefix (temp directory pattern)
-    assert!(sandbox.root_path().to_string_lossy().contains("sandbox_"));
+    assert!(sandbox
+        .root_path()
+        .unwrap()
+        .to_string_lossy()
+        .contains("sandbox_"));
 }
 
 #[test]
 fn test_local_sandbox_new_with_path() {
     let path = std::path::PathBuf::from("/tmp/test_sandbox_path");
     let sandbox = LocalSandbox::new(Some(path.clone()));
-    assert_eq!(sandbox.root_path(), path);
+    assert_eq!(sandbox.root_path(), Some(path.as_path()));
 }
 
 #[tokio::test]
-async fn test_local_sandbox_start() {
+async fn test_local_sandbox_creation() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let path = tmp_dir.path().join("new_sandbox_dir");
     let sandbox = LocalSandbox::new(Some(path.clone()));
-    sandbox.start().await.unwrap();
-    assert!(path.exists());
+    // LocalSandbox no longer has start() - it's managed by the provider
+    assert_eq!(sandbox.root_path(), Some(path.as_path()));
 }
 
 #[test]
