@@ -315,3 +315,74 @@ impl Sandbox for LocalSandbox {
         })
     }
 }
+
+/// Provider for LocalSandbox instances.
+pub struct LocalSandboxProvider;
+
+#[async_trait]
+impl crate::SandboxProvider for LocalSandboxProvider {
+    fn kind(&self) -> &str {
+        "local"
+    }
+
+    fn capabilities(&self) -> crate::SandboxCapabilities {
+        crate::SandboxCapabilities {
+            persistent: true,
+            pausable: false,
+            stoppable: false,
+            destroyable: false,
+        }
+    }
+
+    async fn create(
+        &self,
+        spec: &crate::SandboxSpec,
+    ) -> crate::SandboxResult<crate::BackendSandboxRef> {
+        let work_dir = match &spec.config {
+            crate::SandboxProviderConfig::Local { work_dir } => work_dir.clone(),
+            _ => None,
+        };
+        let sandbox = std::sync::Arc::new(LocalSandbox::new(work_dir));
+        let backend_id = sandbox
+            .root_path()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        Ok(crate::BackendSandboxRef {
+            backend_id,
+            sandbox,
+        })
+    }
+
+    async fn get(&self, backend_id: &str) -> crate::SandboxResult<std::sync::Arc<dyn Sandbox>> {
+        let sandbox = std::sync::Arc::new(LocalSandbox::new(Some(PathBuf::from(backend_id))));
+        Ok(sandbox)
+    }
+
+    async fn list(&self) -> crate::SandboxResult<Vec<crate::SandboxInfo>> {
+        Ok(vec![])
+    }
+
+    async fn start(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Ok(())
+    }
+
+    async fn pause(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Err(SandboxError::Config(
+            "LocalSandbox does not support pause".to_string(),
+        ))
+    }
+
+    async fn resume(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Err(SandboxError::Config(
+            "LocalSandbox does not support resume".to_string(),
+        ))
+    }
+
+    async fn stop(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Ok(())
+    }
+
+    async fn destroy(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Ok(())
+    }
+}

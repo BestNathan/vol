@@ -221,3 +221,90 @@ impl Sandbox for TmpSandbox {
         })
     }
 }
+
+/// Provider for TmpSandbox instances.
+pub struct TmpSandboxProvider;
+
+#[async_trait]
+impl crate::SandboxProvider for TmpSandboxProvider {
+    fn kind(&self) -> &str {
+        "tmp"
+    }
+
+    fn capabilities(&self) -> crate::SandboxCapabilities {
+        crate::SandboxCapabilities {
+            persistent: false,
+            pausable: false,
+            stoppable: false,
+            destroyable: true,
+        }
+    }
+
+    async fn create(
+        &self,
+        spec: &crate::SandboxSpec,
+    ) -> crate::SandboxResult<crate::BackendSandboxRef> {
+        let sub_dir = match &spec.config {
+            crate::SandboxProviderConfig::Tmp { sub_dir } => sub_dir.clone(),
+            _ => None,
+        };
+        let sandbox = if let Some(sub_dir) = sub_dir {
+            std::sync::Arc::new(TmpSandbox::with_sub_dir(&sub_dir))
+        } else {
+            std::sync::Arc::new(TmpSandbox::new())
+        };
+        // Create the directory
+        let root = sandbox.root_path().ok_or_else(|| {
+            crate::SandboxError::Config("TmpSandbox has no root_path".to_string())
+        })?;
+        std::fs::create_dir_all(root).map_err(crate::SandboxError::Io)?;
+        let backend_id = root.to_string_lossy().to_string();
+        Ok(crate::BackendSandboxRef {
+            backend_id,
+            sandbox,
+        })
+    }
+
+    async fn get(&self, backend_id: &str) -> crate::SandboxResult<std::sync::Arc<dyn Sandbox>> {
+        let path = PathBuf::from(backend_id);
+        let sub_dir = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        let sandbox = std::sync::Arc::new(TmpSandbox::with_sub_dir(&sub_dir));
+        Ok(sandbox)
+    }
+
+    async fn list(&self) -> crate::SandboxResult<Vec<crate::SandboxInfo>> {
+        Ok(vec![])
+    }
+
+    async fn start(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Ok(())
+    }
+
+    async fn pause(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Err(crate::SandboxError::Config(
+            "TmpSandbox does not support pause".to_string(),
+        ))
+    }
+
+    async fn resume(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Err(crate::SandboxError::Config(
+            "TmpSandbox does not support resume".to_string(),
+        ))
+    }
+
+    async fn stop(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Ok(())
+    }
+
+    async fn destroy(&self, backend_id: &str) -> crate::SandboxResult<()> {
+        let path = PathBuf::from(backend_id);
+        if path.exists() {
+            std::fs::remove_dir_all(&path).map_err(crate::SandboxError::Io)?;
+        }
+        Ok(())
+    }
+}

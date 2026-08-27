@@ -318,3 +318,121 @@ impl Sandbox for SSHSandbox {
         })
     }
 }
+
+/// Provider for SSHSandbox instances.
+pub struct SSHSandboxProvider {
+    configs: std::sync::Mutex<Vec<crate::registry::SshConfig>>,
+}
+
+impl SSHSandboxProvider {
+    pub fn new() -> Self {
+        Self {
+            configs: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    pub fn add_config(&self, config: crate::registry::SshConfig) {
+        if let Ok(mut configs) = self.configs.lock() {
+            configs.push(config);
+        }
+    }
+}
+
+impl Default for SSHSandboxProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl crate::SandboxProvider for SSHSandboxProvider {
+    fn kind(&self) -> &str {
+        "ssh"
+    }
+
+    fn capabilities(&self) -> crate::SandboxCapabilities {
+        crate::SandboxCapabilities {
+            persistent: true,
+            pausable: false,
+            stoppable: false,
+            destroyable: false,
+        }
+    }
+
+    async fn create(
+        &self,
+        spec: &crate::SandboxSpec,
+    ) -> crate::SandboxResult<crate::BackendSandboxRef> {
+        let ssh_config =
+            match &spec.config {
+                crate::SandboxProviderConfig::Ssh { .. } => {
+                    // For now, use the first registered config
+                    let configs = self.configs.lock().map_err(|_| {
+                        SandboxError::Config("Failed to lock SSH configs".to_string())
+                    })?;
+                    configs.first().cloned().ok_or_else(|| {
+                        SandboxError::Config("No SSH config registered".to_string())
+                    })?
+                }
+                _ => {
+                    return Err(SandboxError::Config(
+                        "SSHSandboxProvider requires SSH config".to_string(),
+                    ))
+                }
+            };
+        let work_dir = match &spec.config {
+            crate::SandboxProviderConfig::Ssh { work_dir, .. } => {
+                Some(work_dir.to_string_lossy().to_string())
+            }
+            _ => None,
+        };
+        let sandbox = std::sync::Arc::new(SSHSandbox::new(
+            spec.name.clone(),
+            work_dir,
+            ssh_config.clone(),
+        )?);
+        let backend_id = format!(
+            "{user}@{host}",
+            user = ssh_config.user,
+            host = ssh_config.host
+        );
+        Ok(crate::BackendSandboxRef {
+            backend_id,
+            sandbox,
+        })
+    }
+
+    async fn get(&self, backend_id: &str) -> crate::SandboxResult<std::sync::Arc<dyn Sandbox>> {
+        Err(SandboxError::NotFound(format!(
+            "SSHSandbox '{backend_id}' not found in cache"
+        )))
+    }
+
+    async fn list(&self) -> crate::SandboxResult<Vec<crate::SandboxInfo>> {
+        Ok(vec![])
+    }
+
+    async fn start(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Ok(())
+    }
+
+    async fn pause(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Err(SandboxError::Config(
+            "SSHSandbox does not support pause".to_string(),
+        ))
+    }
+
+    async fn resume(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Err(SandboxError::Config(
+            "SSHSandbox does not support resume".to_string(),
+        ))
+    }
+
+    async fn stop(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Ok(())
+    }
+
+    async fn destroy(&self, _backend_id: &str) -> crate::SandboxResult<()> {
+        Ok(())
+    }
+}
