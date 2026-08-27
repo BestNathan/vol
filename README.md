@@ -83,9 +83,9 @@ The agent server (`vol-agent-server`) supports three deployment modes configured
   (`fs read <path>`, `fs grep <pattern>`, `--json` envelope) over the built-ins,
   sharing the `vol-llm-cli-tool` abstraction. [[vol-llm-fs-crate]] [[fs-cli-tool]]
 - **Sandboxes** — tools execute inside sandboxes: Local / Tmp / SSH / Firecracker / Wasm.
-  `SandboxRegistry` loads `.agents/sandboxes/*.toml`; each sandbox follows a strict
-  lifecycle: define → construct → register → acquire → bind metadata → initialize →
-  use → cleanup. [[sandbox-lifecycle]] [[vol-llm-sandbox-crate]]
+  `SandboxManager` provides unified lifecycle management with explicit instance identity,
+  state tracking, and provider-based backend abstraction. Configuration lives in
+  `.agents/sandboxes/*.toml`. [[sandbox-lifecycle]] [[vol-llm-sandbox-crate]]
 
 ### 2.4 Agent–Sub-agent Collaboration
 
@@ -130,7 +130,7 @@ See [[docs/wiki/concepts/argocd-app-of-apps-gitops]] for the full guide.
 | `vol-llm-cli-tool` | Core abstraction for "CLI-as-Tool" (shared by `fs`/`task`) |
 | `vol-llm-fs` | CLI-style `fs` tool over the file-op built-ins |
 | `vol-llm-task` | Task models and stores (SeaORM SQLite/Postgres) |
-| `vol-llm-sandbox` | Sandbox abstraction (Local/Tmp/SSH/Firecracker/Wasm) + `SandboxRegistry` |
+| `vol-llm-sandbox` | Sandbox lifecycle management: `SandboxManager`, `SandboxProvider`, `SandboxStore` + implementations (Local/Tmp/SSH/Firecracker/Wasm) |
 | `vol-llm-skill` | Skill system (markdown-frontmatter) |
 | `vol-llm-agent` | ReAct orchestration, `AgentConfig`, plugin system |
 | `vol-llm-agents` | High-level agent implementations |
