@@ -516,6 +516,15 @@ impl DataPlaneServerCoreBuilder {
             .register_provider(Arc::new(vol_llm_sandbox::ssh::SSHSandboxProvider::new()))
             .await;
 
+        // Load sandbox profiles from .agents/sandboxes/ directory
+        let sandboxes_dir = self.working_dir.join(".agents/sandboxes");
+        if sandboxes_dir.exists() {
+            sandbox_manager
+                .load_profiles(&sandboxes_dir)
+                .await
+                .map_err(|e| format!("failed to load sandbox profiles: {e}"))?;
+        }
+
         handler_registry
             .register(Arc::new(SandboxHandler::new(sandbox_manager)))
             .map_err(|e| format!("failed to register SandboxHandler: {e}"))?;

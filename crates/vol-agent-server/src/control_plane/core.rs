@@ -36,7 +36,10 @@ pub struct ControlPlaneServerCore {
 }
 
 impl ControlPlaneServerCore {
-    pub async fn new(state: Arc<ControlPlaneState>) -> Result<Self, String> {
+    pub async fn new(
+        state: Arc<ControlPlaneState>,
+        working_dir: std::path::PathBuf,
+    ) -> Result<Self, String> {
         let mut handler_registry = HandlerRegistry::new();
         handler_registry.register(Arc::new(SystemHandler::new()))?;
         handler_registry.register(Arc::new(ControlHandler::new(state.clone())))?;
@@ -57,6 +60,15 @@ impl ControlPlaneServerCore {
         sandbox_manager
             .register_provider(Arc::new(vol_llm_sandbox::ssh::SSHSandboxProvider::new()))
             .await;
+
+        // Load sandbox profiles from .agents/sandboxes/ directory
+        let sandboxes_dir = working_dir.join(".agents/sandboxes");
+        if sandboxes_dir.exists() {
+            sandbox_manager
+                .load_profiles(&sandboxes_dir)
+                .await
+                .map_err(|e| format!("failed to load sandbox profiles: {e}"))?;
+        }
 
         handler_registry
             .register(Arc::new(SandboxHandler::new(sandbox_manager)))
@@ -241,7 +253,9 @@ mod tests {
     #[tokio::test]
     async fn control_plane_server_core_registers_all_handlers() {
         let state = Arc::new(ControlPlaneState::new());
-        let core = super::ControlPlaneServerCore::new(state).await.unwrap();
+        let core = super::ControlPlaneServerCore::new(state, std::path::PathBuf::from("/tmp"))
+            .await
+            .unwrap();
         // Core doesn't expose handler_registry publicly, but construction succeeds
         // and we can verify state is wired
         assert!(core.state.nodes.list().is_empty());
@@ -250,7 +264,9 @@ mod tests {
     #[tokio::test]
     async fn control_plane_server_core_handle_unknown_operation() {
         let state = Arc::new(ControlPlaneState::new());
-        let core = super::ControlPlaneServerCore::new(state).await.unwrap();
+        let core = super::ControlPlaneServerCore::new(state, std::path::PathBuf::from("/tmp"))
+            .await
+            .unwrap();
         let msg = AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: "1".to_string(),
@@ -305,7 +321,9 @@ mod tests {
     #[tokio::test]
     async fn control_plane_server_core_handle_node_list() {
         let state = Arc::new(ControlPlaneState::new());
-        let core = super::ControlPlaneServerCore::new(state).await.unwrap();
+        let core = super::ControlPlaneServerCore::new(state, std::path::PathBuf::from("/tmp"))
+            .await
+            .unwrap();
         let msg = AgentServerMessage {
             protocol: "agent-server/1".to_string(),
             message_id: "1".to_string(),
