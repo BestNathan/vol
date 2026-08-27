@@ -1,10 +1,10 @@
 ---
 type: concept
 category: framework
-tags: [json-rpc, websocket, remote, jsonrpsee]
+tags: [json-rpc, websocket, remote, jsonrpsee, timeout]
 created: 2026-05-08
-updated: 2026-05-17 (frontend-auto-reconnect)
-source_count: 4
+updated: 2026-08-28
+source_count: 5
 ---
 
 # JSON-RPC WebSocket
@@ -49,9 +49,9 @@ The server side lives in `vol-llm-agent-channel::jsonrpc::handler` [[jsonrpc-ser
 
 ## Web Frontend Auto-Reconnect
 
-The Dioxus web frontend `JsonRpcClient` gained auto-reconnect capability. The internal WebSocket is stored in a `RefCell<web_sys::WebSocket>` inside `ClientInner` (shared via `Rc`), enabling runtime swaps. The `reconnect()` method creates a new WebSocket with identical handlers, swaps it in place, and sets state to `Connecting`. A separate `spawn_local` task watches the `GlobalState.reconnecting` flag and drives an exponential backoff loop (3s → 6s → 12s, max 30s, 10 retries). On reconnect success, another task automatically restores the most recent persisted session via `session.list` → `session.resume` → `session.entries`. See [[frontend-auto-reconnect]] for the full pattern.
+The React frontend `JsonRpcClient` (`frontend/src/lib/jsonrpc-client.ts`) supports auto-reconnect and per-call timeouts. Each `call()` returns a Promise that rejects with `{ code: -32001, message: "Request timed out..." }` if no response arrives within the timeout. Default timeout is 30s (`defaultTimeoutMs` constructor option); per-call override via `{ timeoutMs }`. `timeoutMs: 0` disables the timeout for long-running operations. On WS disconnect, `App.tsx` resets transient state (`isRunning`, `runningAgents`, `runMap`, `pendingSubmitAgent`, `approvalPending`) so the UI doesn't stay locked in "Running" when the backend connection drops mid-run. See [[frontend-auto-reconnect]] for the reconnect pattern and [[serve-loop-parallel-and-timeout-fix]] for the timeout/disconnect-reset rationale.
 
-## Auto-Reconnect
+## Auto-Reconnect (legacy Dioxus)
 
 The `submit()` method implements exponential backoff on failure:
 - Maximum 5 retries

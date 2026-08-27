@@ -29,15 +29,20 @@ export class JsonRpcClient {
   private sendQueue: string[] = []
   private state: ConnectionState = 'connecting'
   private debugCapture: ((capture: DebugCapture) => void) | null = null
+  private defaultTimeoutMs: number
 
   // Event stream: push-based via callbacks stored by consumers
   private eventListeners: Array<(event: AgentEvent) => void> = []
   // Notifications received before any consumer subscribed are buffered here
   private eventBuffer: AgentEvent[] = []
 
-  constructor(url: string, opts?: { autoSubscribe?: boolean }) {
+  constructor(url: string, opts?: { autoSubscribe?: boolean; defaultTimeoutMs?: number }) {
     this.url = url
     this.autoSubscribe = opts?.autoSubscribe ?? true
+    // Default 30s timeout — long enough for slow handlers (sandbox I/O, MCP
+    // warmup) but short enough to surface stuck requests instead of hanging
+    // the UI indefinitely.
+    this.defaultTimeoutMs = opts?.defaultTimeoutMs ?? 30_000
     this.connect()
   }
 
@@ -124,13 +129,39 @@ export class JsonRpcClient {
     }
   }
 
-  call<T>(method: string, params?: unknown): Promise<T> {
+  call<T>(method: string, params?: unknown, opts?: { timeoutMs?: number }): Promise<T> {
     return new Promise((resolve, reject) => {
       const id = this.nextId++
       const request = { jsonrpc: '2.0', method, params: params ?? {}, id }
       const message = JSON.stringify(request)
 
-      this.pending.set(id, { resolve: resolve as ResponseCallback, reject })
+      const timeoutMs = opts?.timeoutMs ?? this.defaultTimeoutMs
+      let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+      // Per-call timeout: reject the promise if no response arrives in time.
+      // This prevents a stuck backend handler from hanging the UI forever.
+      if (timeoutMs > 0) {
+        timeoutId = setTimeout(() => {
+          if (this.pending.has(id)) {
+            this.pending.delete(id)
+            reject({
+              code: -32001,
+              message: `Request timed out after ${Math.round(timeoutMs / 1000)}s`,
+            })
+          }
+        }, timeoutMs)
+      }
+
+      const wrappedResolve: ResponseCallback = (result) => {
+        if (timeoutId) clearTimeout(timeoutId)
+        resolve(result as T)
+      }
+      const wrappedReject: ErrorCallback = (error) => {
+        if (timeoutId) clearTimeout(timeoutId)
+        reject(error)
+      }
+
+      this.pending.set(id, { resolve: wrappedResolve, reject: wrappedReject })
 
       // Capture for debug (DebugPanel WS inspector) — includes internal calls
       // such as agent.subscribe and system.connected

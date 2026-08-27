@@ -99,4 +99,60 @@ describe('JsonRpcClient', () => {
     await new Promise(r => setTimeout(r, 10))
     expect((client as unknown as { ws: MockWebSocket }).ws).not.toBe(oldWs)
   })
+
+  it('rejects call when timeout expires without response', async () => {
+    const { JsonRpcClient } = await importClient()
+    // 50ms timeout for fast test
+    const client = new JsonRpcClient('ws://test/ws', {
+      autoSubscribe: false,
+      defaultTimeoutMs: 50,
+    })
+    await new Promise((r) => setTimeout(r, 10))
+
+    const resultPromise = client.call('slow.method', {}).catch((e) => e)
+    // No response from server — wait past timeout
+    const err = await resultPromise
+    expect(err).toEqual(
+      expect.objectContaining({
+        code: -32001,
+        message: expect.stringContaining('timed out'),
+      }),
+    )
+    client.close()
+  })
+
+  it('per-call timeoutMs overrides default', async () => {
+    const { JsonRpcClient } = await importClient()
+    const client = new JsonRpcClient('ws://test/ws', {
+      autoSubscribe: false,
+      defaultTimeoutMs: 60_000, // long default
+    })
+    await new Promise((r) => setTimeout(r, 10))
+
+    const resultPromise = client
+      .call('slow.method', {}, { timeoutMs: 50 })
+      .catch((e) => e)
+    const err = await resultPromise
+    expect(err).toEqual(expect.objectContaining({ code: -32001 }))
+    client.close()
+  })
+
+  it('timeout=0 disables timeout', async () => {
+    const { JsonRpcClient } = await importClient()
+    const client = new JsonRpcClient('ws://test/ws', {
+      autoSubscribe: false,
+      defaultTimeoutMs: 0, // disabled
+    })
+    await new Promise((r) => setTimeout(r, 10))
+
+    const resultPromise = client.call('slow.method', {})
+    // Wait a bit — should NOT reject
+    await new Promise((r) => setTimeout(r, 50))
+
+    // Still pending — resolve it manually
+    const ws = (client as unknown as { ws: MockWebSocket }).ws
+    ws.receive({ jsonrpc: '2.0', id: 1, result: { ok: true } })
+    await expect(resultPromise).resolves.toEqual({ ok: true })
+    client.close()
+  })
 })

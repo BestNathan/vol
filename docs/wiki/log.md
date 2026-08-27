@@ -1,5 +1,11 @@
 # Change Log
 
+## [2026-08-28] ingest | Data-Plane Serve Loop Parallelization + Frontend Timeout Fix
+- Created sources: [[serve-loop-parallel-and-timeout-fix]]
+- Updated concepts: [[connection-holder]] (send failure now logged at warn), [[json-rpc-websocket]] (per-call timeout, disconnect state reset), [[agent-server-control-data-plane]] (serve_dyn parallelized, HandlerRegistry Clone)
+- Cross-references added: 5
+- Changes: Fixed three interconnected bugs — (1) Sandboxes tab click sent request but got no response, (2) a stuck request blocked all subsequent requests on the same WS connection, (3) requests were processed sequentially per connection. Solution: parallelized data-plane `serve_dyn` (one spawned task per message, mpsc channel for serialized sends), added 30s default timeout to `JsonRpcClient.call()`, reset `isRunning` on WS disconnect, added warn logging for dropped agent events.
+
 ## [2026-08-27] fix | MkDocs canonical Markdown source links
 - Updated sources: [[mkdocs-ai-contextual-menu]] (documented directory-URL failure and edit-link resolution)
 - Updated index: refreshed the source summary and latest-change description

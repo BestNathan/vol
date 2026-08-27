@@ -22,7 +22,12 @@ import {
   wsUrlAtom,
   wsConnectedAtom,
   wsLastErrorAtom,
+  isRunningAtom,
+  runningAgentsAtom,
+  runMapAtom,
+  pendingSubmitAgentAtom,
 } from '@/stores/connection'
+import { approvalPendingAtom } from '@/stores/dialogs'
 import { activeNodeIdAtom, activeTabAtom, LOCAL_NODE_ID, viewingNodeDetailAtom } from '@/stores/ui'
 import { debugPanelAtom } from '@/stores/dialogs'
 import type { ConnectedInfo } from '@/types'
@@ -128,6 +133,15 @@ function AppInner() {
       } else if (state === 'disconnected') {
         setWsConnected(false)
         setWsLastError('Disconnected')
+        // Reset transient run state so the UI doesn't stay locked in "Running"
+        // when the backend connection drops mid-run. On reconnect the user can
+        // re-select the agent, which re-queries agent.status.
+        const store = getDefaultStore()
+        store.set(isRunningAtom, false)
+        store.set(runningAgentsAtom, new Set())
+        store.set(runMapAtom, new Map())
+        store.set(pendingSubmitAgentAtom, null)
+        store.set(approvalPendingAtom, false)
         startReconnect(client)
       }
     })

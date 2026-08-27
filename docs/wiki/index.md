@@ -187,6 +187,7 @@ Last updated: 2026-08-27 (fixed canonical Markdown resolution for MkDocs directo
 | [[per-agent-conversation]] | Per-agent conversation state: HashMap keyed by agent_id, independent entries per agent, active_agent routing | active | 2026-05-23 |
 | [[web-dev-environment-claudemd]] | CLAUDE.md and project skill web tooling update for Dioxus, Tailwind watch mode, cargo-watch, and startup troubleshooting | active | 2026-05-28 |
 | [[remove-vol-agent-manager]] | Cleanup removing obsolete vol-agent-manager crate, legacy frontend, and manager-only deployment artifacts | active | 2026-05-29 |
+| [[serve-loop-parallel-and-timeout-fix]] | Data-plane serve_dyn parallelization, HandlerRegistry Clone, JsonRpcClient per-call timeout, ConnectionHolder send failure logging, isRunning reset on disconnect | active | 2026-08-28 |
 
 ## Analyses
 

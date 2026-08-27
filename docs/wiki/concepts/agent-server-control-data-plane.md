@@ -3,8 +3,8 @@ type: concept
 category: architecture
 tags: [control-plane, data-plane, agent-server, distributed-agents, routing, json-rpc, channel]
 created: 2026-06-10
-updated: 2026-06-17
-source_count: 14
+updated: 2026-08-28
+source_count: 15
 ---
 
 # Agent Server Control Plane / Data Plane
@@ -13,7 +13,7 @@ source_count: 14
 
 The agent server control/data-plane architecture separates cluster-wide coordination from local execution while keeping protocol definitions in [[vol-llm-agent-protocol-crate]] and concrete server behavior in [[vol-agent-server-crate]]. Both planes use JSON-RPC 2.0 over WebSocket: `/ws` for client-facing requests and `/control/v1/ws` for data-plane node links.
 
-Sources: [[agent-server-control-data-plane-architecture]], [[agent-server-control-data-plane-addendum]], [[agent-server-control-data-plane-implementation-plan]], [[control-payload-flat-jsonrpc-encoding-fix]], [[agent-server-role-config-route-skeleton]], [[agent-server-data-plane-core-move]], [[agent-server-control-plane-core-handlers]], [[agent-server-role-route-composition]], [[agent-server-health-route-collision-validation]], [[agent-server-data-plane-snapshot-command]], [[agent-server-control-router-mvp]], [[agent-server-boundary-mode-verification]], [[control-plane-behavior-completion-plan]], [[data-plane-registration-sandbox-tolerance]]
+Sources: [[agent-server-control-data-plane-architecture]], [[agent-server-control-data-plane-addendum]], [[agent-server-control-data-plane-implementation-plan]], [[control-payload-flat-jsonrpc-encoding-fix]], [[agent-server-role-config-route-skeleton]], [[agent-server-data-plane-core-move]], [[agent-server-control-plane-core-handlers]], [[agent-server-role-route-composition]], [[agent-server-health-route-collision-validation]], [[agent-server-data-plane-snapshot-command]], [[agent-server-control-router-mvp]], [[agent-server-boundary-mode-verification]], [[control-plane-behavior-completion-plan]], [[data-plane-registration-sandbox-tolerance]], [[serve-loop-parallel-and-timeout-fix]]
 
 ## Key Points
 
@@ -24,6 +24,8 @@ Sources: [[agent-server-control-data-plane-architecture]], [[agent-server-contro
 - [[vol-llm-runtime-crate]] remains the data-plane single source of truth for runtime resources.
 - JSON-RPC over WebSocket is the only application protocol; HTTP is reserved for `/health` and `/metrics`.
 - `vol-agent-server` config chooses standalone data-plane, standalone control-plane, or combined mode.
+- **Data-plane `serve_dyn` parallelizes per-message**: each inbound WebSocket message is dispatched in its own spawned task; responses flow through an `mpsc::unbounded_channel` to a dedicated sender task that serializes writes to the WebSocket. This prevents slow handlers (sandbox I/O, MCP warmup) from blocking subsequent messages on the same connection [[serve-loop-parallel-and-timeout-fix]]. The control-plane serve loop remains serial — its operations are lightweight and `register` has ordering-sensitive side effects.
+- **`HandlerRegistry` is `Clone`** (Arc-backed handlers + small HashMap) so the data-plane serve loop can hand a clone to each spawned handler task.
 
 ## How It Works
 

@@ -33,6 +33,7 @@ use crate::data_plane::handlers::{
     tool::ToolHandler,
 };
 use crate::data_plane::router::AgentRouter;
+use vol_llm_agent_protocol::agent_server_protocol::{AgentServerMessage, ErrorPayload};
 use vol_llm_agent_protocol::Connection;
 use vol_llm_agent_protocol::HandlerRegistry;
 
@@ -307,6 +308,13 @@ impl DataPlaneServerCore {
     }
 
     /// Serve incoming messages from a type-erased connection.
+    ///
+    /// Each inbound message is dispatched in its own spawned task so a slow
+    /// handler (e.g. sandbox I/O, MCP warmup) cannot block subsequent messages
+    /// on the same connection. Responses are funnelled through an unbounded
+    /// channel to a dedicated sender task, which serialises writes to the
+    /// underlying WebSocket (most WS implementations are not safe for
+    /// concurrent sends).
     #[allow(clippy::unwrap_used)]
     pub async fn serve_dyn(&self, conn: Arc<dyn Connection>) {
         tracing::info!(dir = "dp < client", "data-plane accepted client connection");
@@ -317,39 +325,70 @@ impl DataPlaneServerCore {
             holder.attach(conn.clone()).await;
         }
 
+        // Channel: spawned handler tasks enqueue response messages here; the
+        // sender task drains the channel and writes to the connection in order.
+        let (send_tx, mut send_rx) = tokio::sync::mpsc::unbounded_channel::<AgentServerMessage>();
+
+        // Dedicated sender task — serialises writes to the connection.
+        let sender_conn = conn.clone();
+        let sender_task = tokio::spawn(async move {
+            while let Some(msg) = send_rx.recv().await {
+                if let Err(e) = sender_conn.send(msg).await {
+                    tracing::debug!(%e, "connection send ended");
+                    tracing::info!(
+                        dir = "dp < client",
+                        "data-plane client connection closed (send error)"
+                    );
+                    break;
+                }
+            }
+        });
+
+        // Clone the handler registry so spawned tasks can dispatch without
+        // borrowing `self` (which is not 'static).
+        let handler_registry = self.handler_registry.clone();
+
         while let Some(result) = conn.recv().await {
-            let responses = match result {
-                Ok(msg) => match self.handle(msg).await {
+            let msg = match result {
+                Ok(m) => m,
+                Err(e) => {
+                    tracing::debug!(%e, "connection receive ended");
+                    break;
+                }
+            };
+
+            let registry = handler_registry.clone();
+            let tx = send_tx.clone();
+            tokio::spawn(async move {
+                let message_id = msg.message_id.clone();
+                let operation = msg.operation.clone();
+                let responses = match registry.dispatch(msg).await {
                     Ok(resp) => resp,
-                    Err(e) => vec![vol_llm_agent_protocol::agent_server_protocol::AgentServerMessage::new_error(
-                        uuid::Uuid::new_v4().to_string(),
-                        vol_llm_agent_protocol::agent_server_protocol::Operation::System(
-                            vol_llm_agent_protocol::agent_server_protocol::SystemOperation::Connected,
-                        ),
-                        vol_llm_agent_protocol::agent_server_protocol::ErrorPayload {
+                    Err(e) => vec![AgentServerMessage::new_error(
+                        message_id,
+                        operation,
+                        ErrorPayload {
                             code: "dispatch_error".to_string(),
                             message: e.to_string(),
                             detail: None,
                             terminal: false,
                         },
                     )],
-                },
-                Err(e) => {
-                    tracing::debug!(%e, "connection receive ended");
-                    break;
+                };
+                for resp in responses {
+                    if tx.send(resp).is_err() {
+                        // Sender task gone — connection closed.
+                        break;
+                    }
                 }
-            };
-            for resp in responses {
-                if let Err(e) = conn.send(resp).await {
-                    tracing::debug!(%e, "connection send ended");
-                    tracing::info!(
-                        dir = "dp < client",
-                        "data-plane client connection closed (send error)"
-                    );
-                    return;
-                }
-            }
+            });
         }
+
+        // Drop our sender so the sender task exits once all in-flight handler
+        // tasks have completed (their cloned senders are dropped).
+        drop(send_tx);
+        let _ = sender_task.await;
+
         tracing::info!(dir = "dp < client", "data-plane client connection closed");
     }
 }

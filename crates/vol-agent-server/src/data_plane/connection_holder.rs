@@ -113,7 +113,16 @@ impl AgentPlugin for ConnectionHolder {
                 }),
                 meta: Default::default(),
             };
-            let _ = conn.send(msg).await;
+            if let Err(e) = conn.send(msg).await {
+                // Log at warn level so dropped events are visible — silent
+                // drops make "no response" bugs very hard to diagnose.
+                tracing::warn!(
+                    agent = %self.sender,
+                    run_id = %ctx.run_id,
+                    error = %e,
+                    "failed to send agent event to client connection"
+                );
+            }
         }
     }
 }

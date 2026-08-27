@@ -3,8 +3,8 @@ type: concept
 category: framework
 tags: [connection, plugin, lifecycle, agent]
 created: 2026-05-05
-updated: 2026-05-09
-source_count: 2
+updated: 2026-08-28
+source_count: 3
 ---
 
 # Connection Holder
@@ -27,7 +27,7 @@ source_count: 2
 
 ## How It Works
 
-When registered as an `AgentPlugin` on a ReActAgent, the `ConnectionHolder`'s `listen()` hook is called for every `AgentStreamEvent` the agent produces. It serializes the event to JSON and wraps it in a `Message::Event`, then calls `send()` on the currently attached `Connection`.
+When registered as an `AgentPlugin` on a ReActAgent, the `ConnectionHolder`'s `listen()` hook is called for every `AgentStreamEvent` the agent produces. It serializes the event to JSON and wraps it in a `Message::Event`, then calls `send()` on the currently attached `Connection`. If the send fails (e.g., connection closed mid-run), the error is logged at `warn` level with agent/run_id context — previously the error was silently discarded, making "no response" bugs hard to diagnose [[serve-loop-parallel-and-timeout-fix]].
 
 This creates a bridge between the agent's internal event stream and the external transport layer:
 

@@ -6,6 +6,11 @@ use crate::agent_server_protocol::{AgentServerMessage, ProtocolError};
 use crate::domain::handler::HandlerRef;
 
 /// Registry of domain handlers, dispatched by method name string.
+///
+/// Clone is cheap — handlers are `Arc`-backed and the index is a small `HashMap`.
+/// Cloning lets `serve_dyn` hand a registry to each spawned handler task so the
+/// per-connection recv loop no longer blocks on slow handlers.
+#[derive(Clone)]
 pub struct HandlerRegistry {
     handlers: Vec<HandlerRef>,
     /// method_name → handler index
