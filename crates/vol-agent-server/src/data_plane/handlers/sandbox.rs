@@ -6,19 +6,19 @@ use vol_llm_agent_protocol::agent_server_protocol::{
 };
 use vol_llm_agent_protocol::DomainHandler;
 use vol_llm_agent_protocol::ProtocolError;
-use vol_llm_sandbox::registry::SandboxRegistry;
+use vol_llm_sandbox::SandboxManager;
 
-/// Handler that dispatches sandbox protocol operations to a SandboxRegistry.
+/// Handler that dispatches sandbox protocol operations to a SandboxManager.
 ///
-/// `sandbox.list` iterates all registered sandboxes. Other operations use the
-/// default sandbox (registry.default()) for backward compatibility.
+/// `sandbox.list` iterates all managed sandboxes. Other operations use the
+/// default sandbox (manager.default()) for backward compatibility.
 pub struct SandboxHandler {
-    registry: Arc<SandboxRegistry>,
+    manager: Arc<SandboxManager>,
 }
 
 impl SandboxHandler {
-    pub fn new(registry: Arc<SandboxRegistry>) -> Self {
-        Self { registry }
+    pub fn new(manager: Arc<SandboxManager>) -> Self {
+        Self { manager }
     }
 }
 
@@ -53,20 +53,16 @@ impl DomainHandler for SandboxHandler {
 
         match (op, message.payload) {
             (SandboxOperation::List, Payload::Sandbox(SandboxPayload::List)) => {
-                // Iterate all registered sandboxes
-                let sandboxes: Vec<SandboxInfo> = self
-                    .registry
-                    .names()
+                // List all managed sandboxes
+                let manager_list = self.manager.list(None).await.map_err(|e| {
+                    ProtocolError::PayloadDecodeFailedOwned(format!("sandbox list: {e}"))
+                })?;
+                let sandboxes: Vec<SandboxInfo> = manager_list
                     .into_iter()
-                    .filter_map(|name| {
-                        self.registry.get(name).map(|sb| SandboxInfo {
-                            name: sb.id().to_string(),
-                            kind: sb.kind().to_string(),
-                            root_path: sb
-                                .root_path()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .unwrap_or_default(),
-                        })
+                    .map(|info| SandboxInfo {
+                        name: info.profile,
+                        kind: info.kind,
+                        root_path: info.root_path.unwrap_or_default(),
                     })
                     .collect();
                 Ok(vec![AgentServerMessage::new_result(
@@ -77,7 +73,9 @@ impl DomainHandler for SandboxHandler {
             }
 
             (SandboxOperation::Exec, Payload::Sandbox(SandboxPayload::Exec { command })) => {
-                let sandbox = self.registry.default();
+                let sandbox = self.manager.default().await.map_err(|e| {
+                    ProtocolError::PayloadDecodeFailedOwned(format!("sandbox default: {e}"))
+                })?;
                 let req: vol_llm_sandbox::CommandRequest = command.into();
                 match sandbox.execute(req).await {
                     Ok(output) => Ok(vec![AgentServerMessage::new_result(
@@ -112,7 +110,9 @@ impl DomainHandler for SandboxHandler {
                 }),
             ) => {
                 let p = std::path::Path::new(&path);
-                let sandbox = self.registry.default();
+                let sandbox = self.manager.default().await.map_err(|e| {
+                    ProtocolError::PayloadDecodeFailedOwned(format!("sandbox default: {e}"))
+                })?;
                 match sandbox.read_file(p, offset, limit).await {
                     Ok(content) => {
                         use base64::Engine;
@@ -142,7 +142,9 @@ impl DomainHandler for SandboxHandler {
                         ))
                     })?;
                 let p = std::path::Path::new(&path);
-                let sandbox = self.registry.default();
+                let sandbox = self.manager.default().await.map_err(|e| {
+                    ProtocolError::PayloadDecodeFailedOwned(format!("sandbox default: {e}"))
+                })?;
                 match sandbox.write_file(p, &data).await {
                     Ok(()) => Ok(vec![AgentServerMessage::new_result(
                         mid,
@@ -157,7 +159,9 @@ impl DomainHandler for SandboxHandler {
 
             (SandboxOperation::CreateDir, Payload::Sandbox(SandboxPayload::CreateDir { path })) => {
                 let p = std::path::Path::new(&path);
-                let sandbox = self.registry.default();
+                let sandbox = self.manager.default().await.map_err(|e| {
+                    ProtocolError::PayloadDecodeFailedOwned(format!("sandbox default: {e}"))
+                })?;
                 match sandbox.create_dir_all(p).await {
                     Ok(()) => Ok(vec![AgentServerMessage::new_result(
                         mid,
@@ -172,7 +176,9 @@ impl DomainHandler for SandboxHandler {
 
             (SandboxOperation::ReadDir, Payload::Sandbox(SandboxPayload::ReadDir { path })) => {
                 let p = std::path::Path::new(&path);
-                let sandbox = self.registry.default();
+                let sandbox = self.manager.default().await.map_err(|e| {
+                    ProtocolError::PayloadDecodeFailedOwned(format!("sandbox default: {e}"))
+                })?;
                 match sandbox.read_dir(p).await {
                     Ok(entries) => {
                         let defs: Vec<_> =
@@ -191,7 +197,9 @@ impl DomainHandler for SandboxHandler {
 
             (SandboxOperation::Metadata, Payload::Sandbox(SandboxPayload::Metadata { path })) => {
                 let p = std::path::Path::new(&path);
-                let sandbox = self.registry.default();
+                let sandbox = self.manager.default().await.map_err(|e| {
+                    ProtocolError::PayloadDecodeFailedOwned(format!("sandbox default: {e}"))
+                })?;
                 match sandbox.metadata(p).await {
                     Ok(meta) => Ok(vec![AgentServerMessage::new_result(
                         mid,
@@ -232,34 +240,42 @@ impl DomainHandler for SandboxHandler {
 mod tests {
     use super::*;
     use base64::Engine;
+    use std::collections::HashMap;
     use vol_llm_agent_protocol::agent_server_protocol::{
         CommandRequestDef, SandboxOperation, SandboxPayload,
     };
     use vol_llm_sandbox::local::LocalSandbox;
-    use vol_llm_sandbox::Sandbox;
+    use vol_llm_sandbox::{Sandbox, SandboxManager, SandboxProviderConfig, SandboxSpec};
 
     async fn setup() -> SandboxHandler {
-        let tmp = tempfile::tempdir().unwrap();
-        let mut registry = SandboxRegistry::load(tmp.path()).await.unwrap();
+        let manager = Arc::new(SandboxManager::new());
+        manager
+            .register_provider(Arc::new(vol_llm_sandbox::local::LocalSandboxProvider))
+            .await;
+
+        // Register a local sandbox instance
         let sandbox = Arc::new(LocalSandbox::new(None));
-        sandbox.start().await.unwrap();
-        registry.register("local", sandbox);
-        SandboxHandler::new(Arc::new(registry))
+        let spec = SandboxSpec {
+            name: "local".to_string(),
+            config: SandboxProviderConfig::Local { work_dir: None },
+            metadata: HashMap::new(),
+        };
+        manager.register_instance(spec, sandbox).await.unwrap();
+
+        SandboxHandler::new(manager)
     }
 
     #[tokio::test]
     async fn test_handler_name() {
-        let tmp = tempfile::tempdir().unwrap();
-        let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
-        let handler = SandboxHandler::new(Arc::new(registry));
+        let manager = Arc::new(SandboxManager::new());
+        let handler = SandboxHandler::new(manager);
         assert_eq!(handler.name(), "sandbox");
     }
 
     #[tokio::test]
     async fn test_operations_count() {
-        let tmp = tempfile::tempdir().unwrap();
-        let registry = SandboxRegistry::load(tmp.path()).await.unwrap();
-        let handler = SandboxHandler::new(Arc::new(registry));
+        let manager = Arc::new(SandboxManager::new());
+        let handler = SandboxHandler::new(manager);
         let ops = handler.operations();
         assert_eq!(ops.len(), 7);
     }

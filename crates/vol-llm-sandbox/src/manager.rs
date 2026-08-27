@@ -334,14 +334,21 @@ impl SandboxManager {
         let valid = matches!(
             (from, to),
             (SandboxStatus::Created, SandboxStatus::Starting)
+                | (SandboxStatus::Created, SandboxStatus::Running)
                 | (SandboxStatus::Starting, SandboxStatus::Running)
                 | (SandboxStatus::Running, SandboxStatus::Pausing)
+                | (SandboxStatus::Running, SandboxStatus::Stopping)
+                | (SandboxStatus::Running, SandboxStatus::Stopped)
                 | (SandboxStatus::Pausing, SandboxStatus::Paused)
                 | (SandboxStatus::Paused, SandboxStatus::Starting)
-                | (SandboxStatus::Running, SandboxStatus::Stopping)
+                | (SandboxStatus::Paused, SandboxStatus::Running)
                 | (SandboxStatus::Paused, SandboxStatus::Stopping)
+                | (SandboxStatus::Paused, SandboxStatus::Stopped)
                 | (SandboxStatus::Stopping, SandboxStatus::Stopped)
+                | (SandboxStatus::Stopped, SandboxStatus::Starting)
+                | (SandboxStatus::Stopped, SandboxStatus::Running)
                 | (SandboxStatus::Stopped, SandboxStatus::Destroying)
+                | (SandboxStatus::Stopped, SandboxStatus::Destroyed)
                 | (SandboxStatus::Destroying, SandboxStatus::Destroyed)
                 | (_, SandboxStatus::Failed)
         );

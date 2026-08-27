@@ -45,16 +45,21 @@ impl ControlPlaneServerCore {
         handler_registry.register(Arc::new(ClientHandler::new(state.clone())))?;
         handler_registry.register(Arc::new(RunHandler::new(state.clone())))?;
 
-        let local_sandbox: Arc<dyn vol_llm_sandbox::Sandbox> =
-            Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None));
-        let mut sandbox_registry = vol_llm_sandbox::registry::SandboxRegistry::load(
-            std::path::Path::new("/tmp/vol-control-plane-sandboxes"),
-        )
-        .await
-        .map_err(|e| format!("failed to load sandbox registry: {e}"))?;
-        sandbox_registry.register("local", local_sandbox);
+        // Create SandboxManager with providers
+        let sandbox_manager = Arc::new(vol_llm_sandbox::SandboxManager::new());
+        sandbox_manager
+            .register_provider(Arc::new(vol_llm_sandbox::local::LocalSandboxProvider))
+            .await;
+        sandbox_manager
+            .register_provider(Arc::new(vol_llm_sandbox::tmp::TmpSandboxProvider))
+            .await;
+        #[cfg(feature = "ssh")]
+        sandbox_manager
+            .register_provider(Arc::new(vol_llm_sandbox::ssh::SSHSandboxProvider::new()))
+            .await;
+
         handler_registry
-            .register(Arc::new(SandboxHandler::new(Arc::new(sandbox_registry))))
+            .register(Arc::new(SandboxHandler::new(sandbox_manager)))
             .map_err(|e| format!("failed to register SandboxHandler: {e}"))?;
 
         Ok(Self {

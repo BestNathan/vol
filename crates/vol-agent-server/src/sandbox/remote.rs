@@ -351,6 +351,7 @@ mod tests {
         });
 
         let sandbox = RemoteSandbox {
+            id: vol_llm_sandbox::SandboxId::new(),
             server_url: "ws://localhost:9999/test".into(),
             write_tx,
             inner,
@@ -373,6 +374,7 @@ mod tests {
         let bg = tokio::spawn(async {});
 
         let sandbox = RemoteSandbox {
+            id: vol_llm_sandbox::SandboxId::new(),
             server_url: "ws://localhost:9999/test".into(),
             write_tx,
             inner,
@@ -381,8 +383,8 @@ mod tests {
         };
 
         assert_eq!(sandbox.kind(), "remote");
-        assert_eq!(sandbox.name(), "remote");
-        assert_eq!(sandbox.root_path(), Path::new(""));
+        assert_eq!(sandbox.status(), vol_llm_sandbox::SandboxStatus::Running);
+        assert_eq!(sandbox.root_path(), Some(Path::new("")));
     }
 
     /// Verify that connect fails gracefully when no server is running.
@@ -463,8 +465,8 @@ mod tests {
 
         // Verify kind/name/root_path
         assert_eq!(sandbox.kind(), "remote");
-        assert_eq!(sandbox.name(), "remote");
-        assert_eq!(sandbox.root_path(), Path::new(""));
+        assert_eq!(sandbox.status(), vol_llm_sandbox::SandboxStatus::Running);
+        assert_eq!(sandbox.root_path(), Some(Path::new("")));
 
         // Give the WS server a moment to process
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;

@@ -502,8 +502,22 @@ impl DataPlaneServerCoreBuilder {
         handler_registry
             .register(Arc::new(DataPlaneControlHandler::new()))
             .map_err(|e| format!("failed to register DataPlaneControlHandler: {e}"))?;
+
+        // Create SandboxManager with providers
+        let sandbox_manager = Arc::new(vol_llm_sandbox::SandboxManager::new());
+        sandbox_manager
+            .register_provider(Arc::new(vol_llm_sandbox::local::LocalSandboxProvider))
+            .await;
+        sandbox_manager
+            .register_provider(Arc::new(vol_llm_sandbox::tmp::TmpSandboxProvider))
+            .await;
+        #[cfg(feature = "ssh")]
+        sandbox_manager
+            .register_provider(Arc::new(vol_llm_sandbox::ssh::SSHSandboxProvider::new()))
+            .await;
+
         handler_registry
-            .register(Arc::new(SandboxHandler::new(sandbox_registry.clone())))
+            .register(Arc::new(SandboxHandler::new(sandbox_manager)))
             .map_err(|e| format!("failed to register SandboxHandler: {e}"))?;
         handler_registry
             .register(Arc::new(CapabilityHandler::new(
