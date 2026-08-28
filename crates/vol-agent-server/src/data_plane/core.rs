@@ -358,7 +358,7 @@ impl DataPlaneServerCore {
             let msg = match result {
                 Ok(m) => m,
                 Err(e) => {
-                    tracing::debug!(%e, "connection receive ended");
+                    tracing::info!(%e, "connection receive returned error");
                     break;
                 }
             };
@@ -393,7 +393,6 @@ impl DataPlaneServerCore {
                 };
                 for resp in responses {
                     if tx.send(resp).is_err() {
-                        // Sender task gone — connection closed.
                         tracing::warn!(%method, %message_id, "sender channel closed, dropping response");
                         break;
                     }
@@ -401,6 +400,7 @@ impl DataPlaneServerCore {
             });
         }
 
+        tracing::info!("data-plane main recv loop exited — dropping send_tx");
         // Drop our sender so the sender task exits once all in-flight handler
         // tasks have completed (their cloned senders are dropped).
         drop(send_tx);

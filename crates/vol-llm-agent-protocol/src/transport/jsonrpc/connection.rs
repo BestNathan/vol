@@ -66,17 +66,20 @@ impl JsonRpcConnection {
         tx: tokio::sync::mpsc::Sender<Result<AgentServerMessage, ConnectionError>>,
         mut ws_rx: futures::stream::SplitStream<WebSocket>,
     ) {
+        let mut count = 0u64;
         loop {
             let msg = ws_rx.next().await;
             let Some(msg) = msg else {
-                tracing::info!("WebSocket connection closed");
+                tracing::info!(received = count, "reader: WebSocket stream ended (None)");
                 break;
             };
             match msg {
                 Ok(WsMessage::Text(text)) => {
+                    count += 1;
                     match crate::transport::jsonrpc::codec::decode_jsonrpc_frame(&text) {
                         Ok(agent_msg) => {
                             if tx.send(Ok(agent_msg)).await.is_err() {
+                                tracing::warn!(received = count, "reader: channel send failed");
                                 break;
                             }
                         }
@@ -86,7 +89,7 @@ impl JsonRpcConnection {
                     }
                 }
                 Ok(WsMessage::Close(_)) => {
-                    tracing::info!("WebSocket close received");
+                    tracing::info!(received = count, "reader: WebSocket close received");
                     break;
                 }
                 Ok(WsMessage::Ping(_)) => {}
@@ -95,11 +98,12 @@ impl JsonRpcConnection {
                     tracing::debug!("Ignoring binary message");
                 }
                 Err(e) => {
-                    tracing::debug!(%e, "WebSocket receive ended");
+                    tracing::info!(%e, received = count, "reader: WebSocket error");
                     break;
                 }
             }
         }
+        tracing::info!(received = count, "reader: task exiting");
     }
 }
 
