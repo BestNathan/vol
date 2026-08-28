@@ -34,7 +34,7 @@ impl SandboxProvider for MockProvider {
         }
     }
 
-    async fn create(&self, spec: &SandboxSpec) -> SandboxResult<BackendSandboxRef> {
+    async fn create(&self, _spec: &SandboxSpec) -> SandboxResult<BackendSandboxRef> {
         let sandbox = Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None));
         Ok(BackendSandboxRef {
             backend_id: format!("mock-{}", sandbox.id()),
@@ -42,7 +42,7 @@ impl SandboxProvider for MockProvider {
         })
     }
 
-    async fn get(&self, backend_id: &str) -> SandboxResult<Arc<dyn Sandbox>> {
+    async fn get(&self, _backend_id: &str) -> SandboxResult<Arc<dyn Sandbox>> {
         // Return a new LocalSandbox for testing cache miss scenario
         let sandbox = Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None));
         Ok(sandbox)
@@ -233,7 +233,7 @@ async fn test_default_with_existing_sandbox() {
     manager.register_profile(spec).await;
 
     // Create one sandbox
-    let id = manager.create("test").await.unwrap();
+    let _id = manager.create("test").await.unwrap();
 
     // Default should return the existing sandbox
     let default = manager.default().await.unwrap();
@@ -689,7 +689,7 @@ async fn test_register_instance_with_metadata() {
         metadata,
     };
 
-    let id = manager.register_instance(spec, sandbox).await.unwrap();
+    let _id = manager.register_instance(spec, sandbox).await.unwrap();
 
     // Verify metadata is stored
     let list = manager.list(None).await.unwrap();
@@ -795,7 +795,7 @@ async fn test_default_fallback_without_tmp_provider() {
 
 #[tokio::test]
 async fn test_get_cache_miss_scenario() {
-    use vol_llm_sandbox::{InMemorySandboxStore, SandboxStore};
+    use vol_llm_sandbox::InMemorySandboxStore;
 
     // Create a manager with a shared store
     let store = std::sync::Arc::new(InMemorySandboxStore::new());

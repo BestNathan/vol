@@ -1,7 +1,6 @@
 // Integration test: verify sandbox profiles are loaded from TOML files
-use std::path::PathBuf;
 use std::sync::Arc;
-use vol_llm_sandbox::{SandboxManager, SandboxProvider};
+use vol_llm_sandbox::SandboxManager;
 
 #[tokio::test]
 async fn test_load_sandbox_profiles_integration() {
