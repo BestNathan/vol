@@ -332,16 +332,22 @@ impl DataPlaneServerCore {
         // Dedicated sender task — serialises writes to the connection.
         let sender_conn = conn.clone();
         let sender_task = tokio::spawn(async move {
+            let mut count = 0u64;
             while let Some(msg) = send_rx.recv().await {
+                let msg_id = msg.message_id.clone();
+                let method = msg.operation.method_name().to_string();
+                count += 1;
                 if let Err(e) = sender_conn.send(msg).await {
-                    tracing::debug!(%e, "connection send ended");
+                    tracing::warn!(%e, %msg_id, %method, sent = count, "connection send failed");
                     tracing::info!(
                         dir = "dp < client",
                         "data-plane client connection closed (send error)"
                     );
                     break;
                 }
+                tracing::info!(%msg_id, %method, sent = count, "response sent to client");
             }
+            tracing::info!(total_sent = count, "sender task exiting");
         });
 
         // Clone the handler registry so spawned tasks can dispatch without
@@ -357,27 +363,38 @@ impl DataPlaneServerCore {
                 }
             };
 
+            let method = msg.operation.method_name().to_string();
+            let message_id = msg.message_id.clone();
+            tracing::info!(%method, %message_id, "data-plane received message");
+
             let registry = handler_registry.clone();
             let tx = send_tx.clone();
             tokio::spawn(async move {
-                let message_id = msg.message_id.clone();
                 let operation = msg.operation.clone();
                 let responses = match registry.dispatch(msg).await {
-                    Ok(resp) => resp,
-                    Err(e) => vec![AgentServerMessage::new_error(
-                        message_id,
-                        operation,
-                        ErrorPayload {
-                            code: "dispatch_error".to_string(),
-                            message: e.to_string(),
-                            detail: None,
-                            terminal: false,
-                        },
-                    )],
+                    Ok(resp) => {
+                        tracing::info!(%method, %message_id, count = resp.len(), "handler dispatched OK");
+                        resp
+                    }
+                    Err(e) => {
+                        tracing::warn!(%method, %message_id, %e, "handler dispatch failed");
+                        let err_msg_id = message_id.clone();
+                        vec![AgentServerMessage::new_error(
+                            err_msg_id,
+                            operation,
+                            ErrorPayload {
+                                code: "dispatch_error".to_string(),
+                                message: e.to_string(),
+                                detail: None,
+                                terminal: false,
+                            },
+                        )]
+                    }
                 };
                 for resp in responses {
                     if tx.send(resp).is_err() {
                         // Sender task gone — connection closed.
+                        tracing::warn!(%method, %message_id, "sender channel closed, dropping response");
                         break;
                     }
                 }
