@@ -48,10 +48,8 @@ async fn handle_ws<S>(socket: WebSocket, server: Arc<JsonRpcServer<S>>)
 where
     S: JsonRpcMessageService,
 {
-    tracing::info!("handle_ws: starting serve_connection");
     let conn: Arc<dyn Connection> = Arc::new(JsonRpcConnection::new(socket));
     server.service.serve_connection(conn).await;
-    tracing::info!("handle_ws: serve_connection returned, closing WS");
 }
 
 #[cfg(test)]

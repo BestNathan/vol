@@ -421,7 +421,8 @@ mod tests {
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("sandbox.list");
                                 // Respond with a ListResult as a command frame that
-                                // decode_jsonrpc_frame can parse
+                                // decode_jsonrpc_frame can parse. Use tagged SandboxPayload
+                                // format (SandboxPayload enum is externally tagged by default).
                                 let payload = if method == "sandbox.list" {
                                     serde_json::json!({
                                         "ListResult": {
@@ -499,6 +500,7 @@ mod tests {
                                     let method =
                                         val.get("method").and_then(|v| v.as_str()).unwrap_or("");
                                     let payload = if method == "sandbox.exec" {
+                                        // Tagged SandboxPayload format (matches enum variant name)
                                         serde_json::json!({
                                             "ExecResult": {
                                                 "output": {

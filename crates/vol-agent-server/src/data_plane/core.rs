@@ -345,9 +345,9 @@ impl DataPlaneServerCore {
                     );
                     break;
                 }
-                tracing::info!(%msg_id, %method, sent = count, "response sent to client");
+                tracing::debug!(%msg_id, %method, sent = count, "response sent to client");
             }
-            tracing::info!(total_sent = count, "sender task exiting");
+            tracing::debug!(total_sent = count, "sender task exiting");
         });
 
         // Clone the handler registry so spawned tasks can dispatch without
@@ -365,7 +365,7 @@ impl DataPlaneServerCore {
 
             let method = msg.operation.method_name().to_string();
             let message_id = msg.message_id.clone();
-            tracing::info!(%method, %message_id, "data-plane received message");
+            tracing::debug!(%method, %message_id, "data-plane received message");
 
             let registry = handler_registry.clone();
             let tx = send_tx.clone();
@@ -373,7 +373,7 @@ impl DataPlaneServerCore {
                 let operation = msg.operation.clone();
                 let responses = match registry.dispatch(msg).await {
                     Ok(resp) => {
-                        tracing::info!(%method, %message_id, count = resp.len(), "handler dispatched OK");
+                        tracing::debug!(%method, %message_id, count = resp.len(), "handler dispatched OK");
                         resp
                     }
                     Err(e) => {
@@ -400,7 +400,7 @@ impl DataPlaneServerCore {
             });
         }
 
-        tracing::info!("data-plane main recv loop exited — dropping send_tx");
+        tracing::debug!("data-plane main recv loop exited — dropping send_tx");
         // Drop our sender so the sender task exits once all in-flight handler
         // tasks have completed (their cloned senders are dropped).
         drop(send_tx);

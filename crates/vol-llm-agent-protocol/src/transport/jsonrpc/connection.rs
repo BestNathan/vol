@@ -76,15 +76,14 @@ impl JsonRpcConnection {
             match msg {
                 Ok(WsMessage::Text(text)) => {
                     count += 1;
-                    tracing::info!(
+                    tracing::debug!(
                         received = count,
                         text_len = text.len(),
-                        preview = %text.chars().take(80).collect::<String>(),
                         "reader: received WS text frame"
                     );
                     match crate::transport::jsonrpc::codec::decode_jsonrpc_frame(&text) {
                         Ok(agent_msg) => {
-                            tracing::info!(
+                            tracing::debug!(
                                 received = count,
                                 method = agent_msg.operation.method_name(),
                                 message_id = %agent_msg.message_id,
@@ -94,10 +93,9 @@ impl JsonRpcConnection {
                                 tracing::warn!(received = count, "reader: channel send failed");
                                 break;
                             }
-                            tracing::info!(received = count, "reader: sent to channel OK");
                         }
                         Err(e) => {
-                            tracing::warn!(%e, received = count, "reader: decode failed");
+                            tracing::info!(%e, received = count, "reader: decode failed");
                             let _ = tx.send(Err(e)).await;
                         }
                     }
@@ -106,12 +104,7 @@ impl JsonRpcConnection {
                     tracing::info!(received = count, "reader: WebSocket close received");
                     break;
                 }
-                Ok(WsMessage::Ping(_)) => {
-                    tracing::info!(received = count, "reader: ping received");
-                }
-                Ok(WsMessage::Pong(_)) => {
-                    tracing::info!(received = count, "reader: pong received");
-                }
+                Ok(WsMessage::Ping(_)) | Ok(WsMessage::Pong(_)) => {}
                 Ok(WsMessage::Binary(_)) => {
                     tracing::debug!("Ignoring binary message");
                 }
@@ -132,17 +125,13 @@ impl Connection for JsonRpcConnection {
     }
 
     async fn recv(&self) -> Option<Result<AgentServerMessage, ConnectionError>> {
-        // Don't hold the mutex across the await — receive into a local
-        // future without blocking other potential access. (The receiver is
-        // only used by the main loop, but releasing the lock early avoids
-        // any subtle interaction with the tokio Mutex across await points.)
         let result = {
             let mut rx = self.msg_rx.lock().await;
             rx.recv().await
         };
         match &result {
             Some(Ok(msg)) => {
-                tracing::info!(
+                tracing::debug!(
                     method = msg.operation.method_name(),
                     message_id = %msg.message_id,
                     "Connection::recv -> Some(Ok)"

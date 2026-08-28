@@ -910,9 +910,89 @@ impl Payload {
                 .map(ControlPayload::TaskGetResult)
                 .map(Payload::Control)
                 .map_err(|_| ProtocolError::PayloadDecodeFailed("control.task_get_result")),
-            Operation::Sandbox(_) => serde_json::from_value::<SandboxPayload>(value)
-                .map(Payload::Sandbox)
-                .map_err(|e| ProtocolError::PayloadDecodeFailedOwned(format!("sandbox: {e}"))),
+            // ── Sandbox ──
+            // Accept BOTH formats:
+            //   1. Tagged (backward compat with test mocks): {"Exec": {"command": ...}}
+            //   2. Flat (frontend convention): {"command": {...}}
+            // Try tagged first; if it fails, fall back to flat.
+            Operation::Sandbox(op) => {
+                if let Ok(payload) = serde_json::from_value::<SandboxPayload>(value.clone()) {
+                    return Ok(Payload::Sandbox(payload));
+                }
+                match op {
+                    SandboxOperation::List => Ok(Payload::Sandbox(SandboxPayload::List)),
+                    SandboxOperation::Exec => {
+                        #[derive(Deserialize)]
+                        struct P {
+                            command: CommandRequestDef,
+                        }
+                        let p: P = serde_json::from_value(value)
+                            .map_err(|_| ProtocolError::PayloadDecodeFailed("sandbox.exec"))?;
+                        Ok(Payload::Sandbox(SandboxPayload::Exec {
+                            command: p.command,
+                        }))
+                    }
+                    SandboxOperation::ReadFile => {
+                        #[derive(Deserialize)]
+                        struct P {
+                            path: String,
+                            #[serde(default)]
+                            offset: Option<u64>,
+                            #[serde(default)]
+                            limit: Option<u64>,
+                        }
+                        let p: P = serde_json::from_value(value)
+                            .map_err(|_| ProtocolError::PayloadDecodeFailed("sandbox.read_file"))?;
+                        Ok(Payload::Sandbox(SandboxPayload::ReadFile {
+                            path: p.path,
+                            offset: p.offset,
+                            limit: p.limit,
+                        }))
+                    }
+                    SandboxOperation::WriteFile => {
+                        #[derive(Deserialize)]
+                        struct P {
+                            path: String,
+                            content: String,
+                        }
+                        let p: P = serde_json::from_value(value).map_err(|_| {
+                            ProtocolError::PayloadDecodeFailed("sandbox.write_file")
+                        })?;
+                        Ok(Payload::Sandbox(SandboxPayload::WriteFile {
+                            path: p.path,
+                            content: p.content,
+                        }))
+                    }
+                    SandboxOperation::CreateDir => {
+                        #[derive(Deserialize)]
+                        struct P {
+                            path: String,
+                        }
+                        let p: P = serde_json::from_value(value).map_err(|_| {
+                            ProtocolError::PayloadDecodeFailed("sandbox.create_dir")
+                        })?;
+                        Ok(Payload::Sandbox(SandboxPayload::CreateDir { path: p.path }))
+                    }
+                    SandboxOperation::ReadDir => {
+                        #[derive(Deserialize)]
+                        struct P {
+                            path: String,
+                        }
+                        let p: P = serde_json::from_value(value)
+                            .map_err(|_| ProtocolError::PayloadDecodeFailed("sandbox.read_dir"))?;
+                        Ok(Payload::Sandbox(SandboxPayload::ReadDir { path: p.path }))
+                    }
+                    SandboxOperation::Metadata => {
+                        #[derive(Deserialize)]
+                        struct P {
+                            path: String,
+                        }
+                        let p: P = serde_json::from_value(value)
+                            .map_err(|_| ProtocolError::PayloadDecodeFailed("sandbox.metadata"))?;
+                        Ok(Payload::Sandbox(SandboxPayload::Metadata { path: p.path }))
+                    }
+                }
+            }
         }
     }
 
@@ -2986,6 +3066,57 @@ mod tests {
             let op = Operation::Sandbox(SandboxOperation::Exec);
             let err = Payload::from_operation(&op, serde_json::json!({"bad": "data"})).unwrap_err();
             assert!(err.to_string().contains("sandbox"));
+        }
+
+        /// Frontend sends sandbox requests in FLAT format (no variant tag).
+        /// Ensure both tagged (test-mock convention) and flat (frontend convention) work.
+        #[test]
+        fn test_payload_from_operation_sandbox_flat_format() {
+            // sandbox.list with empty params (flat)
+            let op = Operation::Sandbox(SandboxOperation::List);
+            let result = Payload::from_operation(&op, serde_json::json!({})).unwrap();
+            assert!(matches!(result, Payload::Sandbox(SandboxPayload::List)));
+
+            // sandbox.exec with flat command (no "Exec" tag)
+            let op = Operation::Sandbox(SandboxOperation::Exec);
+            let result = Payload::from_operation(
+                &op,
+                serde_json::json!({
+                    "command": {
+                        "program": "echo",
+                        "args": ["hello"],
+                        "env": [],
+                        "timeout_ms": 5000
+                    }
+                }),
+            )
+            .unwrap();
+            match result {
+                Payload::Sandbox(SandboxPayload::Exec { command }) => {
+                    assert_eq!(command.program, "echo");
+                }
+                _ => panic!("expected Sandbox Exec, got {result:?}"),
+            }
+
+            // sandbox.read_file with flat params
+            let op = Operation::Sandbox(SandboxOperation::ReadFile);
+            let result = Payload::from_operation(
+                &op,
+                serde_json::json!({"path": "/tmp/test.txt", "offset": 10, "limit": 100}),
+            )
+            .unwrap();
+            match result {
+                Payload::Sandbox(SandboxPayload::ReadFile {
+                    path,
+                    offset,
+                    limit,
+                }) => {
+                    assert_eq!(path, "/tmp/test.txt");
+                    assert_eq!(offset, Some(10));
+                    assert_eq!(limit, Some(100));
+                }
+                _ => panic!("expected ReadFile, got {result:?}"),
+            }
         }
 
         #[test]
