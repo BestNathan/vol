@@ -4,7 +4,6 @@ use std::sync::Arc;
 use vol_llm_agents::coding::{CodingAgent, CodingAgentConfig, HTMLReporter, LocalSandbox};
 use vol_llm_core::LLMProvider;
 use vol_llm_provider::{LLMConfig, LLMProviderConfig, LLMProviderRegistry, Secret};
-use vol_llm_sandbox::Sandbox;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -52,7 +51,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let sandbox = Arc::new(LocalSandbox::new(Some(work_dir.clone())));
-    sandbox.start().await?;
 
     let agent = CodingAgent::new(config)?;
 
@@ -82,7 +80,7 @@ Use only standard library (no external crates except clap). Create the files usi
 
     let result = agent.run(task).await;
 
-    sandbox.cleanup().await?;
+    // Temp directories are cleaned up automatically when the sandbox is dropped.
 
     let result = result?;
 

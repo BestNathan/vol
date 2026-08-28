@@ -172,17 +172,14 @@ mod runtime {
     }
 
     #[tokio::test]
-    async fn test_start_creates_work_dir() {
+    async fn test_new_sandbox_has_work_dir() {
         let work_dir = setup_work_dir("start");
         let wasm_path = write_wat_module(&work_dir, "smoke", EXIT0_WAT);
         let sandbox = build_sandbox("sb", &work_dir, "smoke", &wasm_path);
-        // Remove the dir, then call start() — it should recreate
-        std::fs::remove_dir_all(&work_dir).unwrap();
-        assert!(!work_dir.exists());
-        sandbox.start().await.unwrap();
+        // In the new lifecycle, work_dir is set on construction (no start() needed).
         assert!(work_dir.exists());
+        assert_eq!(sandbox.root_path(), Some(work_dir.as_path()));
         // Cleanup: recreate work_dir so the Drop guard doesn't fail
-        std::fs::create_dir_all(&work_dir).unwrap();
         let _ = std::fs::remove_dir_all(&work_dir);
     }
 
