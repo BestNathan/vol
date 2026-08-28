@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use vol_agent_server::data_plane::handlers::sandbox::SandboxHandler;
@@ -9,8 +10,7 @@ use vol_llm_agent_protocol::HandlerRegistry;
 use vol_llm_agent_protocol::MemoryConnection;
 use vol_llm_agent_protocol::MemoryHandle;
 use vol_llm_sandbox::local::LocalSandbox;
-use vol_llm_sandbox::registry::SandboxRegistry;
-use vol_llm_sandbox::Sandbox;
+use vol_llm_sandbox::{SandboxManager, SandboxProviderConfig, SandboxSpec};
 
 /// Create a test server pair: (MemoryHandle for controlling the server, MemoryHandle for client).
 /// Returns (server_handle, client_handle):
@@ -25,16 +25,22 @@ use vol_llm_sandbox::Sandbox;
 ///   test sends a message via handle.send() -> MemoryConnection.recv() gets it
 ///   MemoryConnection.send() -> handle.recv() gets it
 async fn create_test_server() -> MemoryHandle {
-    let sandbox = Arc::new(LocalSandbox::new(None));
-    sandbox.start().await.unwrap();
+    let manager = Arc::new(SandboxManager::new());
+    manager
+        .register_provider(Arc::new(vol_llm_sandbox::local::LocalSandboxProvider))
+        .await;
 
-    let tmp = tempfile::tempdir().unwrap();
-    let mut registry = SandboxRegistry::load(tmp.path()).await.unwrap();
-    registry.register("local", sandbox);
+    let sandbox = Arc::new(LocalSandbox::new(None));
+    let spec = SandboxSpec {
+        name: "local".to_string(),
+        config: SandboxProviderConfig::Local { work_dir: None },
+        metadata: HashMap::new(),
+    };
+    manager.register_instance(spec, sandbox).await.unwrap();
 
     let mut handler_reg = HandlerRegistry::new();
     handler_reg
-        .register(Arc::new(SandboxHandler::new(Arc::new(registry))))
+        .register(Arc::new(SandboxHandler::new(manager)))
         .unwrap();
 
     let (server_conn, handle) = MemoryConnection::new();

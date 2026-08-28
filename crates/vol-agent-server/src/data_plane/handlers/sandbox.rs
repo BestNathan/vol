@@ -245,7 +245,7 @@ mod tests {
         CommandRequestDef, SandboxOperation, SandboxPayload,
     };
     use vol_llm_sandbox::local::LocalSandbox;
-    use vol_llm_sandbox::{Sandbox, SandboxManager, SandboxProviderConfig, SandboxSpec};
+    use vol_llm_sandbox::{SandboxManager, SandboxProviderConfig, SandboxSpec};
 
     async fn setup() -> SandboxHandler {
         let manager = Arc::new(SandboxManager::new());
