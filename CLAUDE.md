@@ -49,6 +49,11 @@ scripts/                  # Build / deploy helpers
 - **JSON-RPC params/results are flat** — `ControlPayload` must not use `#[serde(tag/ content=...)]`.
 - **Route collision**: `control_plane.client_ws_path` must ≠ `node_ws_path` and ≠ `/health` (config validation rejects).
 - **Combined mode** (`control_plane=true, data_plane=true`): `/ws` goes to control-plane; local data-plane registers in-process.
+- **New protocol operation → register in codec**: when adding a new variant to any `*Operation` enum (e.g. `SandboxOperation::ListSpecs`), you MUST:
+  1. Add the `method_name()` match arm in `agent_server_protocol.rs`
+  2. Add the reverse mapping in `operation_codec.rs` (`method_to_operation`)
+  3. Add the payload decode branch in `Payload::from_operation`
+  4. Verify with `./scripts/check-protocol-registration.sh` — ensures every operation variant is registered in the codec
 
 ## Commands
 
