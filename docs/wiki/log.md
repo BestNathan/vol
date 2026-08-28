@@ -684,3 +684,7 @@
 - Created concepts: [[react-pattern]], [[agent-plugin-system]], [[plugin-actions]], [[built-in-plugins]], [[agent-event-stream]], [[agent-builder-pattern]], [[tool-registry]], [[agent-observability]], [[semantic-caching]], [[human-in-the-loop]], [[retry-with-backoff]], [[rate-limiting]]
 - Created entities: [[vol-llm-agent-crate]], [[vol-llm-agents-crate]], [[vol-llm-core-crate]], [[vol-llm-tool-crate]], [[vol-llm-provider-crate]], [[dashscope]] (tdengine entity deleted 2026-08-21 with the pipeline removal)
 - Cross-references added: 12
+
+## [2026-08-28] ingest | Sandbox Specs & Instances Split
+- Created sources: [[sandbox-specs-instances-split]]
+- Changes: Added `sandbox.list_specs` RPC method; split SandboxesPanel into Specs (profiles) and Instances (running) sections; added `SandboxManager::list_specs()` and protocol types
