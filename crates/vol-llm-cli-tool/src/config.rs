@@ -1,6 +1,6 @@
 //! TOML config schema for a CLI tool.
 use serde::Deserialize;
-use vol_llm_sandbox::registry::SandboxConfig;
+use vol_llm_sandbox::SandboxSpec;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CliToolConfig {
@@ -13,9 +13,9 @@ pub struct CliToolConfig {
     #[serde(default = "default_enabled")]
     pub enabled: bool,
 
-    /// Inline sandbox config (XOR with `sandbox_ref`).
+    /// Inline sandbox spec (XOR with `sandbox_ref`).
     #[serde(default)]
-    pub sandbox: Option<SandboxConfig>,
+    pub sandbox: Option<SandboxSpec>,
 
     /// Name of a sandbox in `.agents/sandboxes/` (XOR with `sandbox`).
     #[serde(default)]
@@ -107,14 +107,12 @@ mod tests {
 
         [sandbox]
         name = "ansible-sandbox"
-        type = "ssh"
-        work_dir = "/"
-
-        [sandbox.ssh]
+        provider = "ssh"
         host = "ansible-prod.example.com"
         port = 22
         user = "deploy"
-        identity_file = "/home/u/.ssh/id_ed25519"
+        work_dir = "/"
+        key_path = "/home/u/.ssh/id_ed25519"
 
         [env]
         ANSIBLE_CONFIG = "/opt/ansible/ansible.cfg"
@@ -142,8 +140,9 @@ mod tests {
         assert!(cfg.sandbox.is_some());
         assert!(cfg.sandbox_ref.is_none());
         let sb = cfg.sandbox.as_ref().unwrap();
-        assert_eq!(sb.sandbox_type, "ssh");
-        assert_eq!(sb.ssh.as_ref().unwrap().host, "ansible-prod.example.com");
+        assert_eq!(sb.provider(), "ssh");
+        let ssh = sb.config.as_ssh().unwrap();
+        assert_eq!(ssh.host, "ansible-prod.example.com");
         assert_eq!(
             cfg.env.get("ANSIBLE_CONFIG").map(String::as_str),
             Some("/opt/ansible/ansible.cfg")
@@ -160,7 +159,7 @@ mod tests {
             sandbox_ref = "foo"
             [sandbox]
             name = "bar"
-            type = "local"
+            provider = "local"
         "#;
         let err = CliToolConfig::from_toml(bad).unwrap_err().to_string();
         assert!(err.contains("not both"), "unexpected error: {err}");

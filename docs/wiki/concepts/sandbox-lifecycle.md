@@ -3,8 +3,8 @@ type: concept
 category: architecture
 tags: [sandbox, lifecycle, manager, provider, store, state-machine, capability-discovery]
 created: 2026-08-11
-updated: 2026-08-27
-source_count: 2
+updated: 2026-08-28
+source_count: 3
 ---
 
 # Sandbox Lifecycle Management
@@ -211,7 +211,9 @@ key_path = "/app/.ssh/id_ed25519"
 Changes:
 - `type` → `provider`
 - SSH config flattened (no `[ssh]` section)
-- `identity_file` → `key_path`
+- `identity_file` → `key_path` (old spelling still parses as a serde alias)
+
+Since 2026-08-28 `spec.rs` is the single schema source and `SandboxManager` the sole resolution path — the parallel `SandboxRegistry` loader was deleted after its stale schema caused [[schema-drift]]. `SandboxManager` gained profile-name lookup (`acquire_by_name` / `preload` / `build_inline` / `default_tmp`) alongside instance-ID lookup.
 
 ## Related
 - [[vol-llm-sandbox-crate]] — implementation details
@@ -220,3 +222,5 @@ Changes:
 - [[capability-discovery]] — runtime capability discovery
 - [[tool-registry]] — tools use sandbox for all I/O
 - [[vol-agent-server-crate]] — uses SandboxManager for orchestration
+- [[schema-drift]] — the failure mode that motivated deleting the second loader
+- [[sandbox-registry-manager-unification]] — the unification source page

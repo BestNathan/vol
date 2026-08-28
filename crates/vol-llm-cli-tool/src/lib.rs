@@ -19,22 +19,17 @@ pub use exec::{CliTool, ToolOutput};
 
 use std::path::Path;
 use std::sync::Arc;
-#[cfg(test)]
-use vol_llm_sandbox::local::LocalSandbox;
-use vol_llm_sandbox::registry::SandboxRegistry;
+use vol_llm_sandbox::SandboxManager;
 
 /// Load every `*.toml` in `dir` as a CliTool.
 ///
-/// - `sandbox_ref` entries are resolved against `registry`.
+/// - `sandbox_ref` entries are resolved against `manager` (by profile name).
 /// - Inline `[sandbox]` entries are constructed via
-///   `vol_llm_sandbox::registry::SandboxRegistry::build_sandbox`.
+///   `SandboxManager::build_inline`.
 /// - Files that fail to parse return an error (fail-fast per spec N2).
 /// - Name collisions: if a config's `name` matches an already-loaded tool,
 ///   returns an error (fail-fast).
-pub async fn load_dir(
-    dir: &Path,
-    registry: &SandboxRegistry,
-) -> Result<Vec<CliTool>, CliToolError> {
+pub async fn load_dir(dir: &Path, manager: &SandboxManager) -> Result<Vec<CliTool>, CliToolError> {
     let mut tools = Vec::new();
     let mut seen_names: std::collections::HashMap<String, std::path::PathBuf> =
         std::collections::HashMap::new();
@@ -74,7 +69,7 @@ pub async fn load_dir(
 
         let sandbox: Arc<dyn vol_llm_sandbox::Sandbox> = if let Some(ref name) = config.sandbox_ref
         {
-            match registry.get(name) {
+            match manager.acquire_by_name(name).await {
                 Some(sb) => sb,
                 None => {
                     tracing::warn!(
@@ -85,8 +80,8 @@ pub async fn load_dir(
                     continue;
                 }
             }
-        } else if let Some(sb_cfg) = config.sandbox.clone() {
-            match SandboxRegistry::build_sandbox(sb_cfg).await {
+        } else if let Some(ref spec) = config.sandbox {
+            match manager.build_inline(spec).await {
                 Ok(sb) => sb,
                 Err(e) => {
                     tracing::warn!(
@@ -112,13 +107,36 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+    use vol_llm_sandbox::local::LocalSandboxProvider;
+    use vol_llm_sandbox::tmp::TmpSandboxProvider;
+    use vol_llm_sandbox::{SandboxProviderConfig, SandboxSpec};
+
+    /// Build a `SandboxManager` with local+tmp providers and a "local" profile
+    /// registered at the given working directory.
+    async fn test_manager(work_dir: Option<std::path::PathBuf>) -> SandboxManager {
+        let manager = SandboxManager::new();
+        manager
+            .register_provider(Arc::new(LocalSandboxProvider))
+            .await;
+        manager
+            .register_provider(Arc::new(TmpSandboxProvider))
+            .await;
+        manager
+            .register_profile(SandboxSpec {
+                name: "local".to_string(),
+                config: SandboxProviderConfig::Local { work_dir },
+                metadata: std::collections::HashMap::new(),
+            })
+            .await;
+        // Pre-create the "local" sandbox so acquire_by_name finds it.
+        let _ = manager.acquire_by_name("local").await;
+        manager
+    }
 
     #[tokio::test]
     async fn load_dir_empty_when_missing() {
-        let sandbox_dir = tempdir().unwrap();
-        let mut registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
-        registry.register("local", Arc::new(LocalSandbox::new(None)));
-        let tools = load_dir(Path::new("/nonexistent/path/abc123"), &registry)
+        let manager = test_manager(None).await;
+        let tools = load_dir(Path::new("/nonexistent/path/abc123"), &manager)
             .await
             .unwrap();
         assert!(tools.is_empty());
@@ -129,11 +147,9 @@ mod tests {
         let dir = tempdir().unwrap();
         fs::write(dir.path().join("bad.toml"), "this is not valid toml {{{").unwrap();
 
-        let sandbox_dir = tempdir().unwrap();
-        let mut registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
-        registry.register("local", Arc::new(LocalSandbox::new(None)));
+        let manager = test_manager(None).await;
 
-        let err = load_dir(dir.path(), &registry)
+        let err = load_dir(dir.path(), &manager)
             .await
             .err()
             .unwrap()
@@ -159,12 +175,10 @@ mod tests {
         )
         .unwrap();
 
-        let sandbox_dir = tempdir().unwrap();
-        let mut registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
-        registry.register("local", Arc::new(LocalSandbox::new(None)));
+        let manager = test_manager(None).await;
 
         // Should succeed but skip the tool with missing sandbox
-        let tools = load_dir(dir.path(), &registry).await.unwrap();
+        let tools = load_dir(dir.path(), &manager).await.unwrap();
         assert!(
             tools.is_empty(),
             "tool with missing sandbox should be skipped"
@@ -184,11 +198,9 @@ mod tests {
         fs::write(dir.path().join("a.toml"), body).unwrap();
         fs::write(dir.path().join("b.toml"), body).unwrap();
 
-        let sandbox_dir = tempdir().unwrap();
-        let mut registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
-        registry.register("local", Arc::new(LocalSandbox::new(None)));
+        let manager = test_manager(None).await;
 
-        let err = load_dir(dir.path(), &registry)
+        let err = load_dir(dir.path(), &manager)
             .await
             .err()
             .unwrap()
@@ -211,10 +223,8 @@ mod tests {
         )
         .unwrap();
 
-        let sandbox_dir = tempdir().unwrap();
-        let mut registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
-        registry.register("local", Arc::new(LocalSandbox::new(None)));
-        let tools = load_dir(dir.path(), &registry).await.unwrap();
+        let manager = test_manager(None).await;
+        let tools = load_dir(dir.path(), &manager).await.unwrap();
 
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].config.name, "my-tool");
@@ -234,15 +244,13 @@ mod tests {
 
                 [sandbox]
                 name = "inline-sandbox"
-                type = "local"
+                provider = "local"
             "#,
         )
         .unwrap();
 
-        let sandbox_dir = tempdir().unwrap();
-        let mut registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
-        registry.register("local", Arc::new(LocalSandbox::new(None)));
-        let tools = load_dir(dir.path(), &registry).await.unwrap();
+        let manager = test_manager(None).await;
+        let tools = load_dir(dir.path(), &manager).await.unwrap();
 
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].config.name, "inline-tool");
@@ -264,10 +272,8 @@ mod tests {
         )
         .unwrap();
 
-        let sandbox_dir = tempdir().unwrap();
-        let mut registry = SandboxRegistry::load(sandbox_dir.path()).await.unwrap();
-        registry.register("local", Arc::new(LocalSandbox::new(None)));
-        let tools = load_dir(dir.path(), &registry).await.unwrap();
+        let manager = test_manager(None).await;
+        let tools = load_dir(dir.path(), &manager).await.unwrap();
         assert_eq!(tools.len(), 0, "disabled config should be skipped");
     }
 }

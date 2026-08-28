@@ -4,7 +4,9 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use tokio_util::sync::CancellationToken;
-use vol_llm_sandbox::registry::SandboxRegistry;
+use vol_llm_sandbox::local::LocalSandboxProvider;
+use vol_llm_sandbox::tmp::TmpSandboxProvider;
+use vol_llm_sandbox::SandboxManager;
 use vol_mcp_servers::cli_tools::CliToolsMcpServer;
 use vol_mcp_servers::transport::{self, TransportArgs};
 
@@ -44,11 +46,24 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    let sandbox_registry = SandboxRegistry::load(&cli.sandboxes_dir)
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(std::sync::Arc::new(LocalSandboxProvider))
+        .await;
+    manager
+        .register_provider(std::sync::Arc::new(TmpSandboxProvider))
+        .await;
+    manager
+        .register_provider(std::sync::Arc::new(
+            vol_llm_sandbox::ssh::SSHSandboxProvider::new(),
+        ))
+        .await;
+    manager
+        .preload(&cli.sandboxes_dir)
         .await
-        .map_err(|e| anyhow::anyhow!("sandbox registry: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("sandbox preload: {e}"))?;
 
-    let server = CliToolsMcpServer::load(&cli.cli_tools_dir, &sandbox_registry)
+    let server = CliToolsMcpServer::load(&cli.cli_tools_dir, &manager)
         .await
         .map_err(|e| anyhow::anyhow!("cli-tools load: {e}"))?;
 

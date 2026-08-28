@@ -3,8 +3,8 @@ type: concept
 category: pattern
 tags: [tools, cli, patterns]
 created: 2026-08-16
-updated: 2026-08-16
-source_count: 1
+updated: 2026-08-28
+source_count: 2
 ---
 
 # CLI-Style Tool Pattern
@@ -47,3 +47,5 @@ The `fs` tool is the second implementation, modeled on the `task` CLI; the token
 - [[vol-llm-fs-crate]]: the `fs` implementation of this pattern
 - [[vol-llm-task-crate]]: the `task` implementation of this pattern
 - [[fs-cli-tool]]: source page documenting the `fs` implementation
+- [[sandbox-lifecycle]]: declarative cli-tools (`.agents/cli-tools/*.toml`) resolve their backing sandbox by `sandbox_ref` through `SandboxManager::acquire_by_name()`, or build an inline `[sandbox]` spec via `build_inline()`
+- [[sandbox-registry-manager-unification]]: fixed [[schema-drift]] that silently skipped every declarative cli-tool

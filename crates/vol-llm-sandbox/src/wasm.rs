@@ -10,7 +10,7 @@ use wasmtime_wasi::preview1::{self, WasiP1Ctx};
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::{DirPerms, FilePerms};
 
-use crate::registry::{WasmConfig, WasmModuleConfig};
+use crate::spec::{WasmConfig, WasmModuleConfig};
 use crate::{
     CommandOutput, DirEntry, FileMetadata, FileType, Sandbox, SandboxError, SandboxId,
     SandboxResult, SandboxStatus,

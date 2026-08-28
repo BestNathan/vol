@@ -3,8 +3,8 @@ type: entity
 category: service
 tags: [server, config, json-rpc, task-store, session-store, data-plane, control-plane, gitops]
 created: 2026-06-09
-updated: 2026-08-25
-source_count: 19
+updated: 2026-08-28
+source_count: 20
 ---
 
 # vol-agent-server Crate
@@ -93,17 +93,20 @@ The `agent-server` deployment lives under `deploy/argocd/manifests/workloads/age
 
 **Important:** Real provider API keys live in `agent-provider-secrets`, not `agent-server-secrets`. Both `agent-server` and `docs-rs-mcp` use `acr-registry-secret` for private ACR pulls.
 
-## SandboxHandler Refactor
-Source: [[sandboxes-tab-frontend]]
+## SandboxHandler
+Sources: [[sandboxes-tab-frontend]], [[sandbox-specs-instances-split]], [[sandbox-registry-manager-unification]]
 
-`SandboxHandler` (data_plane/handlers/sandbox.rs) was refactored to accept `Arc<SandboxRegistry>` instead of `Arc<dyn Sandbox>`. This enables `sandbox.list` RPC to iterate all registered sandboxes via `registry.names()` and return `Vec<SandboxInfo>` with name, kind, and root_path. Other sandbox operations (exec, read_file, write_file, create_dir, read_dir, metadata) still use `registry.default()` for backward compatibility.
+`SandboxHandler` (data_plane/handlers/sandbox.rs) holds `Arc<SandboxManager>`. `sandbox.list` returns running instances via `manager.list(None)`; `sandbox.list_specs` returns configured profiles via `manager.list_specs()`. I/O operations (exec, read_file, write_file, create_dir, read_dir, metadata) use `manager.default()`.
 
-Control plane (`control_plane/core.rs`) also updated to create a minimal `SandboxRegistry` with just the "local" sandbox registered.
+It originally took `Arc<dyn Sandbox>`, then `Arc<SandboxRegistry>` (2026-08-25), and finally `Arc<SandboxManager>` when `SandboxRegistry` was deleted (2026-08-28).
+
+Since 2026-08-28 `DataPlaneServerCore` reuses `runtime.sandbox_manager` rather than constructing its own, so control-plane `sandbox.*` operations and data-plane tool execution observe the same instances. `control_plane/core.rs` still builds a standalone manager (it has no `AgentRuntime`), registering Local/Tmp/SSH providers and calling `load_profiles()` — specs only, no eager instantiation.
 
 ## Related
 - [[agent-server-control-data-plane]]
 - [[vol-llm-agent-protocol-crate]]
 - [[vol-llm-runtime-crate]]
+- [[vol-llm-sandbox-crate]]
 - [[runtime-task-store-configuration]]
 - [[runtime-session-store-configuration]]
 - [[session-database-store-implementation]]

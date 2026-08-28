@@ -23,6 +23,7 @@ fn test_sandbox_spec_tmp() {
     let spec = SandboxSpec {
         name: "test".to_string(),
         config: SandboxProviderConfig::Tmp {
+            work_dir: None,
             sub_dir: Some("agent_1".to_string()),
         },
         metadata: HashMap::new(),
@@ -71,8 +72,14 @@ fn test_sandbox_spec_ssh() {
             host: "192.168.1.100".to_string(),
             user: "developer".to_string(),
             work_dir: PathBuf::from("/home/developer/workspace"),
-            port: Some(2222),
+            port: 2222,
             key_path: Some(PathBuf::from("/home/user/.ssh/id_rsa")),
+            identity_file: None,
+            passphrase: None,
+            known_hosts_file: None,
+            host_key: None,
+            idle_timeout_secs: 300,
+            connect_timeout_secs: 10,
         },
         metadata: HashMap::new(),
     };
@@ -83,7 +90,7 @@ fn test_sandbox_spec_ssh() {
     assert_eq!(ssh.host, "192.168.1.100");
     assert_eq!(ssh.user, "developer");
     assert_eq!(ssh.work_dir, PathBuf::from("/home/developer/workspace"));
-    assert_eq!(ssh.port, Some(2222));
+    assert_eq!(ssh.port, 2222);
     assert_eq!(ssh.key_path, Some(PathBuf::from("/home/user/.ssh/id_rsa")));
 }
 
@@ -95,15 +102,21 @@ fn test_sandbox_spec_ssh_defaults() {
             host: "example.com".to_string(),
             user: "user".to_string(),
             work_dir: PathBuf::from("/workspace"),
-            port: None,
+            port: 22,
             key_path: None,
+            identity_file: None,
+            passphrase: None,
+            known_hosts_file: None,
+            host_key: None,
+            idle_timeout_secs: 300,
+            connect_timeout_secs: 10,
         },
         metadata: HashMap::new(),
     };
 
     let ssh = spec.config.as_ssh().unwrap();
     assert_eq!(ssh.host, "example.com");
-    assert_eq!(ssh.port, None);
+    assert_eq!(ssh.port, 22);
     assert_eq!(ssh.key_path, None);
 }
 
@@ -138,7 +151,10 @@ fn test_provider_config_type_matching() {
 
     let tmp_spec = SandboxSpec {
         name: "tmp".to_string(),
-        config: SandboxProviderConfig::Tmp { sub_dir: None },
+        config: SandboxProviderConfig::Tmp {
+            work_dir: None,
+            sub_dir: None,
+        },
         metadata: HashMap::new(),
     };
     assert!(tmp_spec.config.as_local().is_none());
@@ -151,8 +167,14 @@ fn test_provider_config_type_matching() {
             host: "host".to_string(),
             user: "user".to_string(),
             work_dir: PathBuf::from("/tmp"),
-            port: None,
+            port: 22,
             key_path: None,
+            identity_file: None,
+            passphrase: None,
+            known_hosts_file: None,
+            host_key: None,
+            idle_timeout_secs: 300,
+            connect_timeout_secs: 10,
         },
         metadata: HashMap::new(),
     };

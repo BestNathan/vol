@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use vol_llm_context::{AttentionAnchor, ContextBuilderBuilder, ContextContributor};
 use vol_llm_mcp::{McpConfig, McpManager};
-use vol_llm_sandbox::registry::SandboxRegistry;
+use vol_llm_sandbox::SandboxManager;
 use vol_llm_sandbox::SandboxRef;
 use vol_llm_skill::{SkillInjector, SkillLoader, SkillTool};
 use vol_llm_tool::{ExecutableTool, ToolConfig, ToolRegistry};
@@ -27,7 +27,7 @@ pub struct AgentConfigBuilder {
     contributors: Vec<Box<dyn ContextContributor>>,
     mcp_manager: Option<Arc<McpManager>>,
     working_dir: Option<PathBuf>,
-    sandbox_registry: Option<Arc<SandboxRegistry>>,
+    sandbox_manager: Option<Arc<SandboxManager>>,
     default_sandbox: Option<String>,
 }
 
@@ -45,7 +45,7 @@ impl AgentConfigBuilder {
             contributors: Vec::new(),
             mcp_manager: None,
             working_dir: None,
-            sandbox_registry: None,
+            sandbox_manager: None,
             default_sandbox: None,
         }
     }
@@ -85,8 +85,8 @@ impl AgentConfigBuilder {
         self
     }
 
-    pub fn with_sandbox_registry(mut self, registry: Arc<SandboxRegistry>) -> Self {
-        self.sandbox_registry = Some(registry);
+    pub fn with_sandbox_manager(mut self, manager: Arc<SandboxManager>) -> Self {
+        self.sandbox_manager = Some(manager);
         self
     }
 
@@ -319,7 +319,7 @@ impl AgentConfigBuilder {
             tools: Arc::new(tools),
             session: std::sync::RwLock::new(session),
             sandbox: self.sandbox,
-            sandbox_registry: self.sandbox_registry,
+            sandbox_manager: self.sandbox_manager,
             default_sandbox: effective_default_sandbox,
             tool_config,
             context_builder: std::sync::RwLock::new(context_builder),

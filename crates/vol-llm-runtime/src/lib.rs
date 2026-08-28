@@ -73,7 +73,7 @@ pub struct AgentRuntime {
     pub task_store: Arc<dyn TaskStore>,
     pub session_manager: Arc<dyn SessionManager>,
     pub mcp_manager: Arc<McpManager>,
-    pub sandbox_registry: Arc<vol_llm_sandbox::registry::SandboxRegistry>,
+    pub sandbox_manager: Arc<vol_llm_sandbox::SandboxManager>,
     pub skill_loader: Arc<SkillLoader>,
     /// 共享 AgentLoader：注册定义、AgentTool 派发、AgentInjector 注入同源
     pub agent_loader: Arc<AgentLoader>,
@@ -424,22 +424,44 @@ impl AgentRuntimeBuilder {
             Arc::new(manager)
         };
 
-        let sandbox_registry = {
+        let sandbox_manager = {
             let sandboxes_dir = self.working_dir.join(".agents").join("sandboxes");
-            let mut registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir)
-                .await
-                .map_err(|e| format!("Sandbox registry init failed: {e}"))?;
-            // Register "local" as a LocalSandbox at the working_dir so
+            let manager = vol_llm_sandbox::SandboxManager::new();
+            manager
+                .register_provider(std::sync::Arc::new(
+                    vol_llm_sandbox::local::LocalSandboxProvider,
+                ))
+                .await;
+            manager
+                .register_provider(std::sync::Arc::new(
+                    vol_llm_sandbox::tmp::TmpSandboxProvider,
+                ))
+                .await;
+            manager
+                .register_provider(std::sync::Arc::new(
+                    vol_llm_sandbox::ssh::SSHSandboxProvider::new(),
+                ))
+                .await;
+            // Register "local" as a profile pointing at the working_dir so
             // agents that use sandbox="local" can access project files.
-            registry.register(
-                "local",
-                Arc::new(vol_llm_sandbox::local::LocalSandbox::new(Some(
-                    self.working_dir.clone(),
-                ))),
-            );
-            registry
+            manager
+                .register_profile(vol_llm_sandbox::SandboxSpec {
+                    name: "local".to_string(),
+                    config: vol_llm_sandbox::SandboxProviderConfig::Local {
+                        work_dir: Some(self.working_dir.clone()),
+                    },
+                    metadata: std::collections::HashMap::new(),
+                })
+                .await;
+            // Pre-create all sandboxes from disk config so cli-tool loading
+            // can acquire them by name.
+            manager
+                .preload(&sandboxes_dir)
+                .await
+                .map_err(|e| format!("Sandbox manager preload failed: {e}"))?;
+            manager
         };
-        let sandbox_registry = Arc::new(sandbox_registry);
+        let sandbox_manager = Arc::new(sandbox_manager);
         let skill_loader = {
             let loader = Arc::new(SkillLoader::new(Some(self.working_dir.clone())));
             let ld = Arc::clone(&loader);
@@ -484,7 +506,7 @@ impl AgentRuntimeBuilder {
         // (inner register_all logs its own INFO on success)
         vol_llm_tools_builtin::cli_tool::register_all(
             &mut tool_registry,
-            &sandbox_registry,
+            &sandbox_manager,
             &self.working_dir.join(".agents").join("cli-tools"),
         )
         .await
@@ -531,7 +553,7 @@ impl AgentRuntimeBuilder {
             task_store,
             session_manager,
             mcp_manager,
-            sandbox_registry,
+            sandbox_manager,
             skill_loader,
             agent_loader,
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),
@@ -1112,12 +1134,6 @@ base_url = "https://api.test.com"
 
     #[tokio::test]
     async fn resolve_llm_no_providers_returns_error() {
-        let temp = tempfile::tempdir().unwrap();
-        let sandboxes_dir = temp.path().join(".sandboxes");
-        std::fs::create_dir_all(&sandboxes_dir).unwrap();
-        let registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir)
-            .await
-            .unwrap();
         let runtime = AgentRuntime {
             working_dir: PathBuf::from("/tmp"),
             store_dir: PathBuf::from("/tmp/store"),
@@ -1126,7 +1142,7 @@ base_url = "https://api.test.com"
             task_store: Arc::new(vol_llm_task::InMemoryTaskStore::new()),
             session_manager: Arc::new(FileSessionManager::new("/tmp/agents")),
             mcp_manager: Arc::new(McpManager::new(vec![])),
-            sandbox_registry: Arc::new(registry),
+            sandbox_manager: Arc::new(vol_llm_sandbox::SandboxManager::new()),
             skill_loader: Arc::new(SkillLoader::new_empty()),
             agent_loader: Arc::new(AgentLoader::new_empty()),
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),
@@ -1146,12 +1162,6 @@ base_url = "https://api.test.com"
 
     #[tokio::test]
     async fn resolve_llm_with_non_matching_model_falls_back() {
-        let temp = tempfile::tempdir().unwrap();
-        let sandboxes_dir = temp.path().join(".sandboxes");
-        std::fs::create_dir_all(&sandboxes_dir).unwrap();
-        let registry = vol_llm_sandbox::registry::SandboxRegistry::load(&sandboxes_dir)
-            .await
-            .unwrap();
         let runtime = AgentRuntime {
             working_dir: PathBuf::from("/tmp"),
             store_dir: PathBuf::from("/tmp/store"),
@@ -1160,7 +1170,7 @@ base_url = "https://api.test.com"
             task_store: Arc::new(vol_llm_task::InMemoryTaskStore::new()),
             session_manager: Arc::new(FileSessionManager::new("/tmp/agents")),
             mcp_manager: Arc::new(McpManager::new(vec![])),
-            sandbox_registry: Arc::new(registry),
+            sandbox_manager: Arc::new(vol_llm_sandbox::SandboxManager::new()),
             skill_loader: Arc::new(SkillLoader::new_empty()),
             agent_loader: Arc::new(AgentLoader::new_empty()),
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),

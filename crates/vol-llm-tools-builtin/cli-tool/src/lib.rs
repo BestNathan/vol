@@ -9,7 +9,7 @@ use std::path::Path;
 
 use async_trait::async_trait;
 use vol_llm_cli_tool::{CliTool, CliToolError};
-use vol_llm_sandbox::registry::SandboxRegistry;
+use vol_llm_sandbox::SandboxManager;
 use vol_llm_tool::{ExecutableTool, ToolRegistry, ToolResult, ToolResultType, ToolSensitivity};
 
 pub struct CliToolExecutable {
@@ -95,10 +95,10 @@ impl ExecutableTool for CliToolExecutable {
 /// Fails hard on parse errors, name collisions, or missing sandbox refs.
 pub async fn register_all(
     registry: &mut ToolRegistry,
-    sandbox_registry: &SandboxRegistry,
+    sandbox_manager: &SandboxManager,
     dir: &Path,
 ) -> Result<usize, String> {
-    let tools = vol_llm_cli_tool::load_dir(dir, sandbox_registry)
+    let tools = vol_llm_cli_tool::load_dir(dir, sandbox_manager)
         .await
         .map_err(|e| e.to_string())?;
     let count = tools.len();

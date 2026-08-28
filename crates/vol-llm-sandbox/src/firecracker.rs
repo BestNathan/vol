@@ -14,8 +14,10 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 
-use crate::registry::{FirecrackerConfig, SshConfig};
-use crate::{DirEntry, FileMetadata, Sandbox, SandboxError, SandboxResult};
+use crate::spec::{FirecrackerConfig, SshConfig};
+use crate::{
+    DirEntry, FileMetadata, Sandbox, SandboxError, SandboxId, SandboxResult, SandboxStatus,
+};
 
 // ---------------------------------------------------------------------------
 // Part A: HTTP-over-Unix-socket helper
@@ -307,18 +309,15 @@ impl FirecrackerPool {
             host: vm.guest_ip().to_string(),
             port: vm.guest_ssh_port(),
             user: "root".to_string(),
-            identity_file: config.ssh_identity_file.clone(),
+            work_dir: PathBuf::from("/tmp/sandbox"),
+            key_path: Some(PathBuf::from(config.ssh_identity_file.clone())),
             passphrase: config.ssh_passphrase.clone(),
             known_hosts_file: None,
             host_key: Some("".to_string()), // Accept any host key for local microVM
             idle_timeout_secs: config.idle_timeout_secs,
             connect_timeout_secs: config.connect_timeout_secs,
         };
-        let ssh = crate::ssh::SSHSandbox::new(
-            format!("fc-{}", std::process::id()),
-            Some("/tmp/sandbox".to_string()),
-            ssh_config,
-        )?;
+        let ssh = crate::ssh::SSHSandbox::new(format!("fc-{}", std::process::id()), ssh_config)?;
         Ok(FirecrackerVmHandle {
             vm,
             ssh: Arc::new(ssh),

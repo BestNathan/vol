@@ -61,7 +61,8 @@ async fn test_load_sandbox_profiles_with_ssh() {
     let sandbox_dir = temp_dir.path().join(".agents/sandboxes");
     std::fs::create_dir_all(&sandbox_dir).unwrap();
 
-    // Write an SSH sandbox config
+    // Write an SSH sandbox config — the SSHSandboxProvider reads SSH fields
+    // directly from the spec, so no out-of-band config registration is needed.
     let ssh_config = r#"
 name = "test-ssh"
 provider = "ssh"
@@ -69,37 +70,20 @@ work_dir = "/home/user"
 host = "192.168.1.100"
 user = "developer"
 port = 2222
+key_path = "/tmp/test_key"
+idle_timeout_secs = 300
+connect_timeout_secs = 10
 "#;
     std::fs::write(sandbox_dir.join("ssh.toml"), ssh_config).unwrap();
 
     let manager = Arc::new(SandboxManager::new());
+    manager
+        .register_provider(Arc::new(vol_llm_sandbox::ssh::SSHSandboxProvider::new()))
+        .await;
 
-    // Create SSH provider with a config
-    let ssh_provider = vol_llm_sandbox::ssh::SSHSandboxProvider::new();
-    ssh_provider.add_config(vol_llm_sandbox::registry::SshConfig {
-        host: "192.168.1.100".to_string(),
-        port: 2222,
-        user: "developer".to_string(),
-        identity_file: "/tmp/test_key".to_string(),
-        passphrase: None,
-        known_hosts_file: None,
-        host_key: None,
-        idle_timeout_secs: 300,
-        connect_timeout_secs: 10,
-    });
+    manager.preload(&sandbox_dir).await.unwrap();
 
-    manager.register_provider(Arc::new(ssh_provider)).await;
-
-    manager.load_profiles(&sandbox_dir).await.unwrap();
-
-    // Create instance from loaded profile
-    let id = manager.create("test-ssh").await.unwrap();
-
-    let list = manager.list(None).await.unwrap();
-    assert_eq!(list.len(), 1);
-    assert_eq!(list[0].profile, "test-ssh");
-    assert_eq!(list[0].kind, "ssh");
-
-    let sandbox = manager.get(&id).await.unwrap();
+    // The sandbox was pre-created by preload — verify via acquire_by_name.
+    let sandbox = manager.acquire_by_name("test-ssh").await.unwrap();
     assert_eq!(sandbox.kind(), "ssh");
 }

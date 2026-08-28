@@ -4,7 +4,7 @@
 //! trait (execute, read_file, write_file, resolve_path, etc.) using a
 //! minimal WASI module compiled from WAT at test time.
 
-use vol_llm_sandbox::registry::SandboxConfig;
+use vol_llm_sandbox::SandboxSpec;
 // WasmConfig / WasmModuleConfig are only used inside #[cfg(feature = "wasm")]
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -15,7 +15,7 @@ use vol_llm_sandbox::registry::SandboxConfig;
 fn test_wasm_config_defaults() {
     let toml_str = r#"
 name = "wasm"
-type = "wasm"
+provider = "wasm"
 work_dir = "/tmp/wasm"
 
 [wasm]
@@ -23,8 +23,8 @@ work_dir = "/tmp/wasm"
 name = "test"
 path = "/opt/test.wasm"
 "#;
-    let config: SandboxConfig = toml::from_str(toml_str).unwrap();
-    let wasm = config.wasm.unwrap();
+    let spec: SandboxSpec = toml::from_str(toml_str).unwrap();
+    let wasm = spec.config.as_wasm().unwrap();
     assert_eq!(wasm.max_memory_bytes, 134_217_728); // 128 MB default
     assert_eq!(wasm.max_execution_ms, 30_000); // 30s default
     assert_eq!(wasm.modules.len(), 1);
@@ -38,7 +38,7 @@ path = "/opt/test.wasm"
 fn test_wasm_config_with_expose_as_tool() {
     let toml_str = r#"
 name = "wasm"
-type = "wasm"
+provider = "wasm"
 
 [wasm]
 max_memory_bytes = 268435456
@@ -53,8 +53,8 @@ expose_as_tool = true
 name = "runner"
 path = "/opt/runner.wasm"
 "#;
-    let config: SandboxConfig = toml::from_str(toml_str).unwrap();
-    let wasm = config.wasm.unwrap();
+    let spec: SandboxSpec = toml::from_str(toml_str).unwrap();
+    let wasm = spec.config.as_wasm().unwrap();
     assert_eq!(wasm.max_memory_bytes, 268_435_456);
     assert_eq!(wasm.max_execution_ms, 60_000);
     assert_eq!(wasm.modules.len(), 2);
@@ -71,9 +71,9 @@ mod runtime {
     use super::*;
     use std::collections::HashMap;
     use std::time::Duration;
-    use vol_llm_sandbox::registry::{WasmConfig, WasmModuleConfig};
     use vol_llm_sandbox::wasm::WasmSandbox;
     use vol_llm_sandbox::{CommandRequest, Sandbox};
+    use vol_llm_sandbox::{WasmConfig, WasmModuleConfig};
 
     /// Helper: create a fresh work_dir and return it (caller cleans up).
     fn setup_work_dir(label: &str) -> std::path::PathBuf {
@@ -158,7 +158,6 @@ mod runtime {
         let wasm_path = write_wat_module(&work_dir, "smoke", EXIT0_WAT);
         let sandbox = build_sandbox("my-wasm-sb", &work_dir, "smoke", &wasm_path);
         assert_eq!(sandbox.kind(), "wasm");
-        assert_eq!(sandbox.name(), "my-wasm-sb");
         let _ = std::fs::remove_dir_all(&work_dir);
     }
 
@@ -167,7 +166,7 @@ mod runtime {
         let work_dir = setup_work_dir("root");
         let wasm_path = write_wat_module(&work_dir, "smoke", EXIT0_WAT);
         let sandbox = build_sandbox("sb", &work_dir, "smoke", &wasm_path);
-        assert_eq!(sandbox.root_path(), work_dir.as_path());
+        assert_eq!(sandbox.root_path(), Some(work_dir.as_path()));
         let _ = std::fs::remove_dir_all(&work_dir);
     }
 

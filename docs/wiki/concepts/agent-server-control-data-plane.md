@@ -4,7 +4,7 @@ category: architecture
 tags: [control-plane, data-plane, agent-server, distributed-agents, routing, json-rpc, channel]
 created: 2026-06-10
 updated: 2026-08-28
-source_count: 15
+source_count: 16
 ---
 
 # Agent Server Control Plane / Data Plane
@@ -92,7 +92,7 @@ Source: [[data-plane-registration-sandbox-tolerance]]
 
 After Tasks 1-10, two additional implementation tasks were completed:
 
-1. **Sandbox fault tolerance**: `SandboxRegistry::load()` in [[vol-llm-sandbox-crate]] wraps per-file errors in `tracing::warn!` + `continue` instead of propagating via `?`. Invalid TOML, missing SSH config, duplicate names, and `sandbox.start()` failures are all handled gracefully — server starts even when some sandbox configs are broken.
+1. **Sandbox fault tolerance**: sandbox profile loading in [[vol-llm-sandbox-crate]] wraps per-file errors in `tracing::warn!` + `continue` instead of propagating via `?`. Invalid TOML, missing SSH config, duplicate names, and instance-creation failures are all handled gracefully — server starts even when some sandbox configs are broken. (As of 2026-08-28 this is `SandboxManager::load_profiles()` / `preload()`; it was `SandboxRegistry::load()` when originally written. Note that this same tolerance is what let [[schema-drift]] hide a total config-parse failure — see [[sandbox-registry-manager-unification]].)
 
 2. **Remote data-plane registration**: `spawn_data_plane_connector()` in `app.rs` spawns a `tokio::spawn` task that connects a standalone data-plane to a remote control-plane via WebSocket when `control_url` is configured. The connection sequence is: connect -> send `control.register` -> send `capability_snapshot` -> maintain periodic heartbeats. On disconnect, it auto-reconnects with exponential backoff (1s to 60s).
 

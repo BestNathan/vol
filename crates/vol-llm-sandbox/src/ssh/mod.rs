@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 use tracing::debug;
 
-use crate::registry::SshConfig;
+use crate::spec::SshConfig;
 use crate::{
     CommandOutput, DirEntry, FileMetadata, FileType, Sandbox, SandboxError, SandboxId,
     SandboxResult, SandboxStatus,
@@ -43,12 +43,8 @@ impl SSHSandbox {
     ///
     /// `ssh_config` provides connection details; the session is lazily
     /// connected on first use (via [`start`](Sandbox::start)).
-    pub fn new(
-        name: String,
-        work_dir: Option<String>,
-        ssh_config: SshConfig,
-    ) -> SandboxResult<Self> {
-        let remote_work_dir = work_dir.unwrap_or_else(|| "/tmp/sandbox".to_string());
+    pub fn new(name: String, ssh_config: SshConfig) -> SandboxResult<Self> {
+        let remote_work_dir = ssh_config.work_dir.to_string_lossy().to_string();
         let idle_timeout = Duration::from_secs(ssh_config.idle_timeout_secs);
 
         let config = Arc::new(session::SshSandboxConfig {
@@ -57,7 +53,7 @@ impl SSHSandbox {
             host: ssh_config.host,
             port: ssh_config.port,
             user: ssh_config.user,
-            identity_file: ssh_config.identity_file,
+            key_path: ssh_config.key_path,
             passphrase: ssh_config.passphrase,
             known_hosts_file: ssh_config.known_hosts_file,
             host_key: ssh_config.host_key,
@@ -318,21 +314,14 @@ impl Sandbox for SSHSandbox {
 }
 
 /// Provider for SSHSandbox instances.
-pub struct SSHSandboxProvider {
-    configs: std::sync::Mutex<Vec<crate::registry::SshConfig>>,
-}
+///
+/// Creates sandboxes directly from the spec's SSH fields — no out-of-band
+/// config registration needed.
+pub struct SSHSandboxProvider;
 
 impl SSHSandboxProvider {
     pub fn new() -> Self {
-        Self {
-            configs: std::sync::Mutex::new(Vec::new()),
-        }
-    }
-
-    pub fn add_config(&self, config: crate::registry::SshConfig) {
-        if let Ok(mut configs) = self.configs.lock() {
-            configs.push(config);
-        }
+        Self
     }
 }
 
@@ -361,39 +350,18 @@ impl crate::SandboxProvider for SSHSandboxProvider {
         &self,
         spec: &crate::SandboxSpec,
     ) -> crate::SandboxResult<crate::BackendSandboxRef> {
-        let ssh_config =
-            match &spec.config {
-                crate::SandboxProviderConfig::Ssh { .. } => {
-                    // For now, use the first registered config
-                    let configs = self.configs.lock().map_err(|_| {
-                        SandboxError::Config("Failed to lock SSH configs".to_string())
-                    })?;
-                    configs.first().cloned().ok_or_else(|| {
-                        SandboxError::Config("No SSH config registered".to_string())
-                    })?
-                }
-                _ => {
-                    return Err(SandboxError::Config(
-                        "SSHSandboxProvider requires SSH config".to_string(),
-                    ))
-                }
-            };
-        let work_dir = match &spec.config {
-            crate::SandboxProviderConfig::Ssh { work_dir, .. } => {
-                Some(work_dir.to_string_lossy().to_string())
-            }
-            _ => None,
-        };
-        let sandbox = std::sync::Arc::new(SSHSandbox::new(
-            spec.name.clone(),
-            work_dir,
-            ssh_config.clone(),
-        )?);
+        let ssh_config = spec.config.as_ssh().ok_or_else(|| {
+            SandboxError::Config(format!(
+                "SSHSandboxProvider requires SSH config in spec '{}'",
+                spec.name
+            ))
+        })?;
         let backend_id = format!(
             "{user}@{host}",
             user = ssh_config.user,
             host = ssh_config.host
         );
+        let sandbox = std::sync::Arc::new(SSHSandbox::new(spec.name.clone(), ssh_config)?);
         Ok(crate::BackendSandboxRef {
             backend_id,
             sandbox,

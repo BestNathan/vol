@@ -282,7 +282,10 @@ async fn test_multiple_providers() {
 
     let spec2 = SandboxSpec {
         name: "tmp-test".to_string(),
-        config: SandboxProviderConfig::Tmp { sub_dir: None },
+        config: SandboxProviderConfig::Tmp {
+            work_dir: None,
+            sub_dir: None,
+        },
         metadata: HashMap::new(),
     };
     manager.register_profile(spec2).await;
@@ -557,7 +560,10 @@ async fn test_list_with_filter_by_kind() {
 
     let spec2 = SandboxSpec {
         name: "tmp-test".to_string(),
-        config: SandboxProviderConfig::Tmp { sub_dir: None },
+        config: SandboxProviderConfig::Tmp {
+            work_dir: None,
+            sub_dir: None,
+        },
         metadata: HashMap::new(),
     };
     manager.register_profile(spec2).await;
@@ -823,4 +829,293 @@ async fn test_get_cache_miss_scenario() {
     // Get should fall back to provider since cache is empty
     let sandbox = manager2.get(&id).await.unwrap();
     assert_eq!(sandbox.kind(), "local");
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Profile-name lookup API (absorbed from the deleted SandboxRegistry)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/// Provider whose `create` always fails — for exercising warn+skip paths.
+struct FailingProvider;
+
+#[async_trait]
+impl SandboxProvider for FailingProvider {
+    fn kind(&self) -> &str {
+        "local"
+    }
+    fn capabilities(&self) -> SandboxCapabilities {
+        SandboxCapabilities {
+            persistent: false,
+            pausable: false,
+            stoppable: false,
+            destroyable: false,
+        }
+    }
+    async fn create(&self, _spec: &SandboxSpec) -> SandboxResult<BackendSandboxRef> {
+        Err(vol_llm_sandbox::SandboxError::Config(
+            "intentional failure".to_string(),
+        ))
+    }
+    async fn get(&self, _backend_id: &str) -> SandboxResult<Arc<dyn Sandbox>> {
+        Err(vol_llm_sandbox::SandboxError::NotFound("x".to_string()))
+    }
+    async fn list(&self) -> SandboxResult<Vec<vol_llm_sandbox::SandboxInfo>> {
+        Ok(vec![])
+    }
+    async fn start(&self, _b: &str) -> SandboxResult<()> {
+        Ok(())
+    }
+    async fn pause(&self, _b: &str) -> SandboxResult<()> {
+        Ok(())
+    }
+    async fn resume(&self, _b: &str) -> SandboxResult<()> {
+        Ok(())
+    }
+    async fn stop(&self, _b: &str) -> SandboxResult<()> {
+        Ok(())
+    }
+    async fn destroy(&self, _b: &str) -> SandboxResult<()> {
+        Ok(())
+    }
+}
+
+fn local_spec(name: &str) -> SandboxSpec {
+    SandboxSpec {
+        name: name.to_string(),
+        config: SandboxProviderConfig::Local { work_dir: None },
+        metadata: HashMap::new(),
+    }
+}
+
+#[tokio::test]
+async fn acquire_by_name_creates_on_first_call() {
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(Arc::new(MockProvider::new("local")))
+        .await;
+    manager.register_profile(local_spec("dev")).await;
+
+    let sandbox = manager.acquire_by_name("dev").await;
+    assert!(sandbox.is_some(), "should create sandbox for known profile");
+    assert_eq!(sandbox.unwrap().kind(), "local");
+}
+
+#[tokio::test]
+async fn acquire_by_name_returns_same_instance_on_repeat() {
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(Arc::new(MockProvider::new("local")))
+        .await;
+    manager.register_profile(local_spec("dev")).await;
+
+    let first = manager.acquire_by_name("dev").await.unwrap();
+    let second = manager.acquire_by_name("dev").await.unwrap();
+
+    // Cache hit: same underlying allocation, hence same instance id.
+    assert_eq!(first.id(), second.id());
+    assert!(Arc::ptr_eq(&first, &second));
+}
+
+#[tokio::test]
+async fn acquire_by_name_unknown_profile_returns_none() {
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(Arc::new(MockProvider::new("local")))
+        .await;
+
+    assert!(manager.acquire_by_name("no-such-profile").await.is_none());
+}
+
+#[tokio::test]
+async fn acquire_by_name_missing_provider_returns_none() {
+    let manager = SandboxManager::new();
+    // Profile registered, but no provider for its kind.
+    manager.register_profile(local_spec("dev")).await;
+
+    assert!(manager.acquire_by_name("dev").await.is_none());
+}
+
+#[tokio::test]
+async fn acquire_by_name_provider_failure_returns_none() {
+    let manager = SandboxManager::new();
+    manager.register_provider(Arc::new(FailingProvider)).await;
+    manager.register_profile(local_spec("dev")).await;
+
+    assert!(
+        manager.acquire_by_name("dev").await.is_none(),
+        "creation failure should yield None, not panic"
+    );
+}
+
+#[tokio::test]
+async fn preload_loads_and_instantiates_every_profile() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("a.toml"),
+        "name = \"a\"\nprovider = \"local\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("b.toml"),
+        "name = \"b\"\nprovider = \"local\"\n",
+    )
+    .unwrap();
+
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(Arc::new(MockProvider::new("local")))
+        .await;
+
+    manager.preload(dir.path()).await.unwrap();
+
+    // Both profiles are known and already instantiated.
+    assert_eq!(manager.list_specs().await.len(), 2);
+    assert!(manager.acquire_by_name("a").await.is_some());
+    assert!(manager.acquire_by_name("b").await.is_some());
+}
+
+#[tokio::test]
+async fn preload_skips_profiles_whose_creation_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("a.toml"),
+        "name = \"a\"\nprovider = \"local\"\n",
+    )
+    .unwrap();
+
+    let manager = SandboxManager::new();
+    manager.register_provider(Arc::new(FailingProvider)).await;
+
+    // preload itself succeeds — per-profile failures warn and skip.
+    manager.preload(dir.path()).await.unwrap();
+    assert_eq!(manager.list_specs().await.len(), 1);
+    assert!(manager.acquire_by_name("a").await.is_none());
+}
+
+#[tokio::test]
+async fn preload_missing_dir_is_ok() {
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(Arc::new(MockProvider::new("local")))
+        .await;
+
+    manager
+        .preload(std::path::Path::new("/nonexistent/sandboxes/xyz"))
+        .await
+        .unwrap();
+    assert_eq!(manager.list_specs().await.len(), 0);
+}
+
+#[tokio::test]
+async fn build_inline_returns_untracked_sandbox() {
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(Arc::new(MockProvider::new("local")))
+        .await;
+
+    let sandbox = manager.build_inline(&local_spec("inline")).await.unwrap();
+    assert_eq!(sandbox.kind(), "local");
+
+    // Not registered as a profile, and not tracked as an instance.
+    assert!(manager.acquire_by_name("inline").await.is_none());
+    assert_eq!(manager.list(None).await.unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn build_inline_unknown_provider_errors() {
+    let manager = SandboxManager::new();
+    // No provider registered at all.
+    let err = match manager.build_inline(&local_spec("inline")).await {
+        Ok(_) => panic!("expected error when no provider is registered"),
+        Err(e) => e.to_string(),
+    };
+    assert!(
+        err.contains("no provider registered") || err.contains("local"),
+        "unexpected error: {err}"
+    );
+}
+
+#[tokio::test]
+async fn default_tmp_returns_tmp_sandbox_when_provider_present() {
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(Arc::new(vol_llm_sandbox::tmp::TmpSandboxProvider))
+        .await;
+
+    let sandbox = manager.default_tmp().await;
+    assert_eq!(sandbox.kind(), "tmp");
+}
+
+#[tokio::test]
+async fn default_tmp_falls_back_to_local_without_tmp_provider() {
+    let manager = SandboxManager::new();
+    // No "tmp" provider registered → build_inline errors → local fallback.
+    let sandbox = manager.default_tmp().await;
+    assert_eq!(sandbox.kind(), "local");
+}
+
+#[tokio::test]
+async fn destroy_clears_profile_name_mapping() {
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(Arc::new(MockProvider::new("local")))
+        .await;
+    manager.register_profile(local_spec("dev")).await;
+
+    let id = manager.create("dev").await.unwrap();
+    let before = manager.acquire_by_name("dev").await;
+    assert!(
+        before.is_some(),
+        "create() should populate the name mapping"
+    );
+
+    manager.destroy(&id).await.unwrap();
+
+    // The mapping was pruned; a fresh instance is created on next acquire.
+    let after = manager.acquire_by_name("dev").await;
+    assert!(after.is_some(), "profile still registered, so re-creatable");
+    assert_ne!(
+        before.unwrap().id(),
+        after.unwrap().id(),
+        "should be a new instance, not the destroyed one"
+    );
+}
+
+#[tokio::test]
+async fn acquire_by_name_uses_real_local_and_tmp_providers() {
+    let work = tempfile::tempdir().unwrap();
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(Arc::new(vol_llm_sandbox::local::LocalSandboxProvider))
+        .await;
+    manager
+        .register_provider(Arc::new(vol_llm_sandbox::tmp::TmpSandboxProvider))
+        .await;
+    manager
+        .register_profile(SandboxSpec {
+            name: "proj".to_string(),
+            config: SandboxProviderConfig::Local {
+                work_dir: Some(work.path().to_path_buf()),
+            },
+            metadata: HashMap::new(),
+        })
+        .await;
+    manager
+        .register_profile(SandboxSpec {
+            name: "scratch".to_string(),
+            config: SandboxProviderConfig::Tmp {
+                work_dir: None,
+                sub_dir: Some("acquire-test".to_string()),
+            },
+            metadata: HashMap::new(),
+        })
+        .await;
+
+    let local = manager.acquire_by_name("proj").await.unwrap();
+    assert_eq!(local.kind(), "local");
+    assert_eq!(local.root_path(), Some(work.path()));
+
+    let tmp = manager.acquire_by_name("scratch").await.unwrap();
+    assert_eq!(tmp.kind(), "tmp");
+    assert!(tmp.root_path().unwrap().ends_with("acquire-test"));
 }

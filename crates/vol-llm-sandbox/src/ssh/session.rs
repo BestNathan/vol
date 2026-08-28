@@ -17,7 +17,8 @@ pub struct SshSandboxConfig {
     pub host: String,
     pub port: u16,
     pub user: String,
-    pub identity_file: String,
+    /// Path to the SSH private key. If `None`, only ssh-agent auth is attempted.
+    pub key_path: Option<PathBuf>,
     pub passphrase: Option<String>,
     pub known_hosts_file: Option<String>,
     pub host_key: Option<String>,
@@ -231,17 +232,24 @@ fn verify_host_key(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxRe
 }
 
 fn authenticate(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxResult<()> {
-    let identity = shellexpand::tilde(&config.identity_file).to_string();
-    let identity_path = PathBuf::from(&identity);
+    // Expand the key path once, if configured.
+    let identity_path = config.key_path.as_ref().map(|p| {
+        let expanded = shellexpand::tilde(&p.to_string_lossy()).to_string();
+        PathBuf::from(expanded)
+    });
 
-    // Try with passphrase if provided
-    if let Some(ref passphrase) = config.passphrase {
-        sess.userauth_pubkey_file(&config.user, None, &identity_path, Some(passphrase))
-            .map_err(|e| SandboxError::Ssh(format!("auth failed: {e}")))?;
-        return Ok(());
+    // 1. Try key file with passphrase (if both are set).
+    if let (Some(ref path), Some(ref passphrase)) = (&identity_path, &config.passphrase) {
+        if sess
+            .userauth_pubkey_file(&config.user, None, path, Some(passphrase))
+            .is_ok()
+            && sess.authenticated()
+        {
+            return Ok(());
+        }
     }
 
-    // Try ssh-agent first, then key file without passphrase
+    // 2. Try ssh-agent (works even without a configured key file).
     let agent_authed = {
         let mut agent = sess.agent().ok();
         if let Some(ref mut agent) = agent {
@@ -256,9 +264,12 @@ fn authenticate(sess: &ssh2::Session, config: &SshSandboxConfig) -> SandboxResul
         }
     };
 
+    // 3. Fall back to key file without passphrase.
     if !agent_authed {
-        sess.userauth_pubkey_file(&config.user, None, &identity_path, None)
-            .map_err(|e| SandboxError::Ssh(format!("auth failed: {e}")))?;
+        if let Some(ref path) = identity_path {
+            sess.userauth_pubkey_file(&config.user, None, path, None)
+                .map_err(|e| SandboxError::Ssh(format!("auth failed: {e}")))?;
+        }
     }
 
     if !sess.authenticated() {

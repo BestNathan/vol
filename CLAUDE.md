@@ -59,19 +59,51 @@ scripts/                  # Build / deploy helpers
 
 ### Build & Check
 
+**Always use `just`, never raw `cargo`** — the recipes wrap nextest, feature flags, and fallbacks that raw cargo misses.
+
 ```bash
-cargo check -p vol-agent-server -p vol-llm-agent-protocol
-cargo build -p vol-agent-server --release
+just check          # cargo check --workspace
+just fmt            # format all Rust code
+just fmt-check      # CI formatting gate
+just clippy         # workspace clippy (warnings allowed)
+just clippy-strict  # -D warnings (CI gate)
+just test-compile   # compile all tests without running
 ```
 
 ### Test & Coverage
 
 ```bash
-cargo test -p vol-agent-server -p vol-llm-agent-protocol
-just cover vol-agent-server                               # summary
-just cover-gate vol-agent-server 80                       # gate check
-just cover-html vol-llm-agent-protocol                    # browser report
+# Tiers
+just test-unit                    # unit tests only (src/ inline #[cfg(test)])
+just test-integration             # integration tests only (tests/, kind(test) filter)
+just test                         # unit + integration (all non-e2e)
+just test-crate <crate>           # single crate, all targets
+just test-unit-crates <crate...>  # unit tests for specific crates (pre-push tier)
+just test-slow                    # slow profile: 120s slow-timeout, terminate-after 5
+just test-e2e                     # #[ignore = "e2e"] tests (need external services)
+just test-sandbox                 # sandbox crate only
+just test-sandbox-ssh             # sandbox with ssh feature
+just test-tools                   # tool + sandbox + builtins
+
+# Coverage
+just cover <crate>                # summary
+just cover-gate <crate> 80        # gate check (≥80%)
+just cover-gate-multi 80 <c1> <c2>
+just cover-html <crate>           # browser report
+
+# Guards
+just no-doc-tests            just boundaries
+just no-clippy-allow         just no-plaintext-secrets
+just audit
 ```
+
+#### Test-running gotchas (learned the hard way)
+
+- **Compilation dominates.** `vol-agent-server` test binaries take **~9 minutes** to compile cold; the 199 tests then run in **2.5 seconds**. A "hanging" test run is almost always still compiling. Compile first with `cargo nextest run -p <crate> --no-run` to see progress, then run.
+- **`just test-*` recipes redirect stderr to `/dev/null`** (for the nextest→cargo fallback), which also swallows all nextest progress output. When you need to watch progress, call `cargo nextest run` directly — but only for diagnosis, not as the normal path.
+- **The nextest `default` profile has no `slow-timeout`** — tests can hang forever. Only `--profile slow` (`just test-slow`) has `terminate-after = 5`. Use it when you suspect a hang.
+- **`vol-agent-server` integration tests need `--features vol-agent-server/test-utils`** — `just test-integration` passes this already; `just test-crate` does not.
+- Never `pkill -f "cargo test"` while other cargo work is in flight — it kills background test tasks too.
 
 ### Web Dev
 
