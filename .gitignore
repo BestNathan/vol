@@ -52,3 +52,5 @@ frontend/coverage/
 
 # MkDocs build output (github pages)
 .github/pages/site/
+# copy-to-llm plugin writes its JS/CSS here on every mkdocs build
+docs/wiki/assets/copy-to-llm/

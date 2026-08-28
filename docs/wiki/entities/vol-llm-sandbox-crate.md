@@ -133,7 +133,7 @@ connect_timeout_secs = 10         # default 10
 | `tmp` | `work_dir`, `sub_dir` |
 | `ssh` | fields flattened into the top-level table |
 | `firecracker` | nested `[firecracker]` table |
-| `wasm` | nested `[wasm]` table + `[[wasm.modules]]` |
+| `wasm` | nested `[wasm]` table + a `wasm.modules` array-of-tables |
 
 Extraction helpers: `as_local()` / `as_tmp()` / `as_ssh()` / `as_firecracker()` / `as_wasm()`.
 
