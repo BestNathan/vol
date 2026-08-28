@@ -17,7 +17,7 @@ use vol_llm_core::{
     ToolChoice,
 };
 use vol_llm_mcp::McpManager;
-use vol_llm_sandbox::registry::SandboxRegistry;
+use vol_llm_sandbox::SandboxManager;
 use vol_llm_sandbox::SandboxRef;
 use vol_llm_skill::{SkillInjector, SkillLoader};
 use vol_llm_tool::{ToolConfig, ToolContext, ToolRegistry};
@@ -39,7 +39,7 @@ pub struct AgentConfig {
     /// write via agent.set_session() (gated by is_running).
     pub(crate) session: std::sync::RwLock<Arc<Session>>,
     pub sandbox: Option<SandboxRef>,
-    pub sandbox_registry: Option<Arc<SandboxRegistry>>,
+    pub sandbox_manager: Option<Arc<SandboxManager>>,
     pub default_sandbox: Option<String>,
     /// Per-tool configuration (includes sandbox overrides, tool-specific settings).
     pub tool_config: ToolConfig,
@@ -110,7 +110,7 @@ impl Default for AgentConfig {
                 InMemoryEntryStore::new(),
             )))),
             sandbox: None,
-            sandbox_registry: None,
+            sandbox_manager: None,
             default_sandbox: None,
             tool_config: ToolConfig::new(),
             context_builder: RwLock::new(ContextBuilderBuilder::new(128_000).build()),
@@ -710,9 +710,8 @@ impl ReActAgent {
                         // Resolve sandbox:
                         //   1. ToolConfig.get_sandbox(tool_name) — per-tool override
                         //   2. AgentDef.sandbox — agent default
-                        //   3. Registry default ("local")
-                        let sandbox_ref = if let Some(ref registry) =
-                            run_ctx.config.sandbox_registry
+                        //   3. Manager default ("local")
+                        let sandbox_ref = if let Some(ref manager) = run_ctx.config.sandbox_manager
                         {
                             let sandbox_name = run_ctx
                                 .config
@@ -720,9 +719,10 @@ impl ReActAgent {
                                 .get_sandbox(&call.name)
                                 .or_else(|| run_ctx.config.default_sandbox.clone())
                                 .unwrap_or_else(|| "local".to_string());
-                            registry
-                                .acquire(&sandbox_name)
-                                .unwrap_or_else(|| registry.default())
+                            match manager.acquire_by_name(&sandbox_name).await {
+                                Some(sb) => sb,
+                                None => manager.default_tmp().await,
+                            }
                         } else {
                             match &sandbox {
                                 Some(sb) => sb.clone(),

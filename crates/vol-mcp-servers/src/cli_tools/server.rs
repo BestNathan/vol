@@ -21,9 +21,9 @@ pub struct CliToolsMcpServer {
 impl CliToolsMcpServer {
     pub async fn load(
         cli_tools_dir: &std::path::Path,
-        sandbox_registry: &vol_llm_sandbox::registry::SandboxRegistry,
+        sandbox_manager: &vol_llm_sandbox::SandboxManager,
     ) -> Result<Self, String> {
-        let raw_tools = vol_llm_cli_tool::load_dir(cli_tools_dir, sandbox_registry)
+        let raw_tools = vol_llm_cli_tool::load_dir(cli_tools_dir, sandbox_manager)
             .await
             .map_err(|e| e.to_string())?;
 

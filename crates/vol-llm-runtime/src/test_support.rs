@@ -72,15 +72,7 @@ impl AgentRuntime {
             tool_registry
         });
         let mcp_manager = Arc::new(McpManager::new(vec![]));
-        let sandbox_registry = {
-            let tmp = std::env::temp_dir().join("vol-llm-runtime-test-sandboxes");
-            let _ = std::fs::create_dir_all(&tmp);
-            Arc::new(
-                vol_llm_sandbox::registry::SandboxRegistry::load(&tmp)
-                    .await
-                    .expect("SandboxRegistry init in for_test"),
-            )
-        };
+        let sandbox_manager = Arc::new(vol_llm_sandbox::SandboxManager::new());
         let skill_loader = Arc::new(SkillLoader::new_empty());
 
         AgentRuntime {
@@ -91,7 +83,7 @@ impl AgentRuntime {
             task_store,
             session_manager,
             mcp_manager,
-            sandbox_registry,
+            sandbox_manager,
             skill_loader,
             agent_loader: Arc::new(AgentLoader::new_empty()),
             agent_defs: Arc::new(std::sync::RwLock::new(HashMap::new())),

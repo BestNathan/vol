@@ -3,8 +3,8 @@ type: entity
 category: service
 tags: [runtime, agents, tools, task-store, session-store, data-plane]
 created: 2026-06-09
-updated: 2026-08-20
-source_count: 11
+updated: 2026-08-28
+source_count: 12
 ---
 
 # vol-llm-runtime Crate

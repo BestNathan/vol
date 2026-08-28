@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, agent, react, rust]
 created: 2026-05-04
-updated: 2026-08-20
-source_count: 4
+updated: 2026-08-28
+source_count: 5
 ---
 
 # vol-llm-agent Crate

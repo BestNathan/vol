@@ -92,8 +92,8 @@ pub struct DataPlaneServerCore {
     router: AgentRouter,
     holders: Arc<std::sync::Mutex<HashMap<String, Arc<ConnectionHolder>>>>,
 
-    // === Sandbox registry (from runtime) ===
-    sandbox_registry: Arc<vol_llm_sandbox::registry::SandboxRegistry>,
+    // === Sandbox manager (from runtime) ===
+    sandbox_manager: Arc<vol_llm_sandbox::SandboxManager>,
 
     // === Agent definitions (from runtime) ===
     agent_defs: Arc<std::sync::RwLock<HashMap<String, vol_llm_core::AgentDef>>>,
@@ -208,7 +208,7 @@ impl DataPlaneServerCore {
             .with_llm(llm)
             .with_tools(self.tool_registry.clone()) // full, unfiltered registry
             .with_session(session)
-            .with_sandbox_registry(self.sandbox_registry.clone())
+            .with_sandbox_manager(self.sandbox_manager.clone())
             .with_working_dir(agent_dir.clone())
             .build()
             .expect("AgentConfig build failed — LLM, tools, and session are all provided");
@@ -499,7 +499,7 @@ impl DataPlaneServerCoreBuilder {
         let agent_defs = runtime.agent_defs.clone();
         let agent_status = runtime.agent_status.clone();
         let session_manager = runtime.session_manager.clone();
-        let sandbox_registry = runtime.sandbox_registry.clone();
+        let sandbox_manager = runtime.sandbox_manager.clone();
         let capability_overlays = runtime.capability_overlays.clone();
 
         // Tool registry already includes SkillTool from AgentRuntime
@@ -559,30 +559,12 @@ impl DataPlaneServerCoreBuilder {
             .register(Arc::new(DataPlaneControlHandler::new()))
             .map_err(|e| format!("failed to register DataPlaneControlHandler: {e}"))?;
 
-        // Create SandboxManager with providers
-        let sandbox_manager = Arc::new(vol_llm_sandbox::SandboxManager::new());
-        sandbox_manager
-            .register_provider(Arc::new(vol_llm_sandbox::local::LocalSandboxProvider))
-            .await;
-        sandbox_manager
-            .register_provider(Arc::new(vol_llm_sandbox::tmp::TmpSandboxProvider))
-            .await;
-        #[cfg(feature = "ssh")]
-        sandbox_manager
-            .register_provider(Arc::new(vol_llm_sandbox::ssh::SSHSandboxProvider::new()))
-            .await;
-
-        // Load sandbox profiles from .agents/sandboxes/ directory
-        let sandboxes_dir = self.working_dir.join(".agents/sandboxes");
-        if sandboxes_dir.exists() {
-            sandbox_manager
-                .load_profiles(&sandboxes_dir)
-                .await
-                .map_err(|e| format!("failed to load sandbox profiles: {e}"))?;
-        }
-
+        // Reuse the SandboxManager from runtime — it already has providers
+        // registered and profiles pre-loaded.
         handler_registry
-            .register(Arc::new(SandboxHandler::new(sandbox_manager)))
+            .register(Arc::new(SandboxHandler::new(
+                runtime.sandbox_manager.clone(),
+            )))
             .map_err(|e| format!("failed to register SandboxHandler: {e}"))?;
         handler_registry
             .register(Arc::new(CapabilityHandler::new(
@@ -607,7 +589,7 @@ impl DataPlaneServerCoreBuilder {
             mcp_manager,
             skill_loader,
             tool_registry,
-            sandbox_registry,
+            sandbox_manager,
             llm,
             router,
             holders,
@@ -770,7 +752,7 @@ impl DataPlaneServerCore {
             .register(Arc::new(DataPlaneControlHandler::new()))
             .ok();
 
-        let sandbox_registry = runtime.sandbox_registry.clone();
+        let sandbox_manager = runtime.sandbox_manager.clone();
         let capability_overlays = runtime.capability_overlays.clone();
 
         handler_registry
@@ -790,7 +772,7 @@ impl DataPlaneServerCore {
             mcp_manager: Arc::new(McpManager::new(vec![])),
             skill_loader: Arc::new(SkillLoader::new_empty()),
             tool_registry: Arc::new(ToolRegistry::new()),
-            sandbox_registry,
+            sandbox_manager,
             llm: Arc::new(TestLlm),
             router,
             holders,

@@ -245,7 +245,7 @@ impl crate::SandboxProvider for TmpSandboxProvider {
         spec: &crate::SandboxSpec,
     ) -> crate::SandboxResult<crate::BackendSandboxRef> {
         let sub_dir = match &spec.config {
-            crate::SandboxProviderConfig::Tmp { sub_dir } => sub_dir.clone(),
+            crate::SandboxProviderConfig::Tmp { sub_dir, .. } => sub_dir.clone(),
             _ => None,
         };
         let sandbox = if let Some(sub_dir) = sub_dir {

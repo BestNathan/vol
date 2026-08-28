@@ -19,6 +19,8 @@ pub struct SandboxManager {
     specs: RwLock<HashMap<String, SandboxSpec>>,
     /// Cache of live sandbox handles keyed by backend_id.
     instances: RwLock<HashMap<String, Arc<dyn Sandbox>>>,
+    /// Maps profile name → backend_id for fast `acquire_by_name` lookup.
+    name_to_backend: RwLock<HashMap<String, String>>,
 }
 
 impl SandboxManager {
@@ -28,6 +30,7 @@ impl SandboxManager {
             store: Arc::new(InMemorySandboxStore::new()),
             specs: RwLock::new(HashMap::new()),
             instances: RwLock::new(HashMap::new()),
+            name_to_backend: RwLock::new(HashMap::new()),
         }
     }
 
@@ -37,6 +40,7 @@ impl SandboxManager {
             store,
             specs: RwLock::new(HashMap::new()),
             instances: RwLock::new(HashMap::new()),
+            name_to_backend: RwLock::new(HashMap::new()),
         }
     }
 
@@ -77,6 +81,114 @@ impl SandboxManager {
         self.specs.write().await.insert(spec.name.clone(), spec);
     }
 
+    /// Look up a sandbox by profile name, creating it on first access.
+    ///
+    /// This is the primary entry point for code that used to call
+    /// `SandboxRegistry::acquire(name)` — returns a cached instance if
+    /// one exists for the profile, otherwise creates one via the
+    /// registered provider and caches it.
+    pub async fn acquire_by_name(&self, name: &str) -> Option<SandboxRef> {
+        // Fast path: already cached.
+        {
+            let name_map = self.name_to_backend.read().await;
+            if let Some(backend_id) = name_map.get(name) {
+                let instances = self.instances.read().await;
+                if let Some(sandbox) = instances.get(backend_id) {
+                    return Some(sandbox.clone());
+                }
+            }
+        }
+
+        // Slow path: create via provider.
+        let spec = {
+            let specs = self.specs.read().await;
+            specs.get(name)?.clone()
+        };
+        let provider = {
+            let providers = self.providers.read().await;
+            providers.get(spec.provider()).cloned()?
+        };
+
+        match provider.create(&spec).await {
+            Ok(backend_ref) => {
+                let sandbox = backend_ref.sandbox.clone();
+                self.instances
+                    .write()
+                    .await
+                    .insert(backend_ref.backend_id.clone(), backend_ref.sandbox);
+                self.name_to_backend
+                    .write()
+                    .await
+                    .insert(name.to_string(), backend_ref.backend_id);
+                Some(sandbox)
+            }
+            Err(e) => {
+                tracing::warn!(
+                    profile = name,
+                    error = %e,
+                    "failed to create sandbox for profile"
+                );
+                None
+            }
+        }
+    }
+
+    /// Load profiles from a directory and pre-create a sandbox instance
+    /// for each one. Individual failures are logged and skipped — matches
+    /// the old `SandboxRegistry::load()` behavior.
+    pub async fn preload(&self, sandboxes_dir: &Path) -> SandboxResult<()> {
+        self.load_profiles(sandboxes_dir).await?;
+        let names: Vec<String> = self.specs.read().await.keys().cloned().collect();
+        for name in names {
+            if self.acquire_by_name(&name).await.is_none() {
+                tracing::warn!(profile = %name, "preload: sandbox creation failed, skipped");
+            }
+        }
+        Ok(())
+    }
+
+    /// Build a one-off sandbox from a spec without caching.
+    ///
+    /// Used for inline `[sandbox]` blocks in cli-tool configs — the
+    /// resulting sandbox is owned by the cli-tool, not tracked by the
+    /// manager.
+    pub async fn build_inline(&self, spec: &SandboxSpec) -> SandboxResult<SandboxRef> {
+        let provider = {
+            let providers = self.providers.read().await;
+            providers.get(spec.provider()).cloned().ok_or_else(|| {
+                SandboxError::UnknownType(format!(
+                    "no provider registered for kind '{}'",
+                    spec.provider()
+                ))
+            })?
+        };
+        let backend_ref = provider.create(spec).await?;
+        Ok(backend_ref.sandbox)
+    }
+
+    /// Fall back to a fresh TmpSandbox when no named sandbox is available.
+    ///
+    /// Replacement for the old `SandboxRegistry::default()`.
+    pub async fn default_tmp(&self) -> SandboxRef {
+        match self
+            .build_inline(&SandboxSpec {
+                name: "default-tmp".to_string(),
+                config: crate::SandboxProviderConfig::Tmp {
+                    work_dir: None,
+                    sub_dir: None,
+                },
+                metadata: HashMap::new(),
+            })
+            .await
+        {
+            Ok(sb) => sb,
+            Err(e) => {
+                tracing::warn!(error = %e, "default_tmp: TmpSandbox build failed, using LocalSandbox");
+                Arc::new(crate::local::LocalSandbox::new(None))
+            }
+        }
+    }
+
     /// Create a new sandbox instance from a profile.
     pub async fn create(&self, profile: &str) -> SandboxResult<SandboxId> {
         let spec = {
@@ -114,7 +226,11 @@ impl SandboxManager {
         self.instances
             .write()
             .await
-            .insert(backend_ref.backend_id, backend_ref.sandbox);
+            .insert(backend_ref.backend_id.clone(), backend_ref.sandbox);
+        self.name_to_backend
+            .write()
+            .await
+            .insert(spec.name.clone(), backend_ref.backend_id);
 
         Ok(id)
     }
@@ -256,6 +372,11 @@ impl SandboxManager {
 
         provider.destroy(&record.backend_id).await?;
         self.instances.write().await.remove(&record.backend_id);
+        // Also remove any profile→backend mapping for this record.
+        {
+            let mut name_map = self.name_to_backend.write().await;
+            name_map.retain(|_, backend_id| backend_id != &record.backend_id);
+        }
         self.store.delete(id).await?;
         Ok(())
     }
@@ -274,7 +395,10 @@ impl SandboxManager {
         // Create a fresh TmpSandbox
         let spec = SandboxSpec {
             name: "default-tmp".to_string(),
-            config: crate::SandboxProviderConfig::Tmp { sub_dir: None },
+            config: crate::SandboxProviderConfig::Tmp {
+                work_dir: None,
+                sub_dir: None,
+            },
             metadata: HashMap::new(),
         };
 
@@ -331,7 +455,14 @@ impl SandboxManager {
             metadata: spec.metadata.clone(),
         };
         self.store.insert(record).await?;
-        self.instances.write().await.insert(backend_id, sandbox);
+        self.instances
+            .write()
+            .await
+            .insert(backend_id.clone(), sandbox);
+        self.name_to_backend
+            .write()
+            .await
+            .insert(spec.name.clone(), backend_id);
         Ok(id)
     }
 

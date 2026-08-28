@@ -16,7 +16,6 @@ pub mod firecracker;
 pub mod local;
 pub mod manager;
 pub mod provider;
-pub mod registry;
 pub mod spec;
 #[cfg(feature = "ssh")]
 pub mod ssh;
@@ -27,7 +26,10 @@ pub mod wasm;
 
 pub use manager::SandboxManager;
 pub use provider::{BackendSandboxRef, SandboxInfo, SandboxProvider};
-pub use spec::{SandboxProviderConfig, SandboxSpec};
+pub use spec::{
+    FirecrackerConfig, LocalConfig, SandboxProviderConfig, SandboxSpec, SshConfig, TmpConfig,
+    WasmConfig, WasmModuleConfig,
+};
 pub use store::{InMemorySandboxStore, SandboxFilter, SandboxRecord, SandboxStore};
 
 /// Stable instance identifier, distinct from profile name.

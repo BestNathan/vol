@@ -3,8 +3,8 @@ type: entity
 category: product
 tags: [crate, mcp, transport, rust, docker]
 created: 2026-05-10
-updated: 2026-06-16
-source_count: 2
+updated: 2026-08-28
+source_count: 3
 ---
 
 # vol-mcp-servers Crate
@@ -28,6 +28,20 @@ The `vol-mcp-servers` crate provides standalone MCP (Model Context Protocol) ser
 | Binary | Description | Tools |
 |--------|-------------|-------|
 | `docs-rs-mcp` | docs.rs/crates.io documentation search | 4 (search_crates, readme, get_item, search_in_crate) |
+| `cli-tools-mcp` | Serves `.agents/cli-tools/*.toml` declarative CLI tools over MCP | one per enabled config (currently `ansible`, `gh`, `echo-tool`) |
+
+### cli-tools-mcp
+Source: [[sandbox-registry-manager-unification]]
+
+Exposes each `.agents/cli-tools/*.toml` config as one MCP tool taking a single `command` string, validated against the config's `binaries` whitelist and executed inside the config's sandbox. See [[cli-style-tool-pattern]].
+
+CLI flags: `--cli-tools-dir` (default `.agents/cli-tools`), `--sandboxes-dir` (default `.agents/sandboxes`), plus the shared transport args.
+
+Startup builds a [[sandbox-lifecycle]] `SandboxManager`, registers Local/Tmp/SSH providers, calls `preload(sandboxes_dir)`, then hands the manager to `CliToolsMcpServer::load()`, which resolves each tool's `sandbox_ref` via `acquire_by_name()`.
+
+Deployed as its own workload (`deploy/argocd/manifests/workloads/mcp/cli-tools-mcp/`) with cli-tool and sandbox ConfigMaps projected in, and the `ansible-ssh-key` Secret mounted at `/app/.ssh`. Runs as root — required for SSH key access.
+
+**Known failure mode:** both the sandbox loader and the cli-tool loader warn-and-skip on failure, so a broken sandbox config yields a healthy server serving zero tools. This happened for real (2026-08-27 → 2026-08-28) via [[schema-drift]] — see [[sandbox-registry-manager-unification]]. When debugging "no tools", check the startup warnings, not the health endpoint.
 
 ## Transport Architecture
 
