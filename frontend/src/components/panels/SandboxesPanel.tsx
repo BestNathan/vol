@@ -1,15 +1,17 @@
-// Sandboxes panel: lists all registered sandboxes on the active data-plane node.
-// Shows name, kind, and root_path for each sandbox.
+// Sandboxes panel: shows spec profiles (templates) and running instances.
+// Specs section lists available sandbox configurations.
+// Instances section lists currently running sandbox instances.
 import { useCallback, useEffect, useRef } from 'react'
 import { useAtom, useAtomValue } from 'jotai'
 import { getPanelClient } from '@/lib/panel-client'
-import { sandboxesStateAtom } from '@/stores/sandboxes'
+import { sandboxesStateAtom, sandboxSpecsStateAtom } from '@/stores/sandboxes'
 import { activeNodeIdAtom } from '@/stores/ui'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import type { RpcMethods } from '@/lib/protocol'
-import type { SandboxInfo } from '@/types'
+import type { SandboxInfo, SandboxSpecInfo } from '@/types'
 
 function errMsg(err: unknown): string {
   return (err as { message?: string } | null)?.message ?? String(err)
@@ -35,36 +37,60 @@ export function kindBadgeClass(kind: string): string {
 
 export function SandboxesPanel() {
   const nodeId = useAtomValue(activeNodeIdAtom)
-  const [state, setState] = useAtom(sandboxesStateAtom)
+  const [instancesState, setInstancesState] = useAtom(sandboxesStateAtom)
+  const [specsState, setSpecsState] = useAtom(sandboxSpecsStateAtom)
   const nodeIdRef = useRef(nodeId)
 
   useEffect(() => {
     nodeIdRef.current = nodeId
   }, [nodeId])
 
-  const load = useCallback(
+  const loadInstances = useCallback(
     async (target: string | null) => {
       if (!target) {
-        setState({ sandboxes: [], loading: false, error: null })
+        setInstancesState({ sandboxes: [], loading: false, error: null })
         return
       }
-      setState((s) => ({ ...s, loading: true, error: null }))
+      setInstancesState((s) => ({ ...s, loading: true, error: null }))
       try {
         const res =
           await getPanelClient().call<RpcMethods['sandbox.list']['result']>('sandbox.list')
         if (nodeIdRef.current !== target) return
-        setState({ sandboxes: res.sandboxes ?? [], loading: false, error: null })
+        setInstancesState({ sandboxes: res.sandboxes ?? [], loading: false, error: null })
       } catch (err) {
         if (nodeIdRef.current !== target) return
-        setState((s) => ({ ...s, loading: false, error: errMsg(err) }))
+        setInstancesState((s) => ({ ...s, loading: false, error: errMsg(err) }))
       }
     },
-    [setState],
+    [setInstancesState],
+  )
+
+  const loadSpecs = useCallback(
+    async (target: string | null) => {
+      if (!target) {
+        setSpecsState({ specs: [], loading: false, error: null })
+        return
+      }
+      setSpecsState((s) => ({ ...s, loading: true, error: null }))
+      try {
+        const res =
+          await getPanelClient().call<RpcMethods['sandbox.list_specs']['result']>(
+            'sandbox.list_specs',
+          )
+        if (nodeIdRef.current !== target) return
+        setSpecsState({ specs: res.specs ?? [], loading: false, error: null })
+      } catch (err) {
+        if (nodeIdRef.current !== target) return
+        setSpecsState((s) => ({ ...s, loading: false, error: errMsg(err) }))
+      }
+    },
+    [setSpecsState],
   )
 
   useEffect(() => {
-    void load(nodeId)
-  }, [load, nodeId])
+    void loadInstances(nodeId)
+    void loadSpecs(nodeId)
+  }, [loadInstances, loadSpecs, nodeId])
 
   if (!nodeId) {
     return (
@@ -81,7 +107,14 @@ export function SandboxesPanel() {
     )
   }
 
-  if (state.loading && state.sandboxes.length === 0 && state.error === null) {
+  const allLoading =
+    (instancesState.loading || specsState.loading) &&
+    instancesState.sandboxes.length === 0 &&
+    specsState.specs.length === 0 &&
+    instancesState.error === null &&
+    specsState.error === null
+
+  if (allLoading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
         <Skeleton className="h-4 w-48" />
@@ -91,36 +124,157 @@ export function SandboxesPanel() {
     )
   }
 
-  if (state.error !== null && state.sandboxes.length === 0) {
-    return (
-      <ScrollArea className="flex-1">
-        <div className="h-full p-3 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3 text-center">
-            <div className="text-destructive text-[14px]">Failed to load sandboxes</div>
-            <div className="text-muted-foreground text-[12px] max-w-[300px] break-words">
-              {state.error}
-            </div>
-            <Button variant="outline" size="sm" onClick={() => void load(nodeId)}>
-              Retry
-            </Button>
-          </div>
-        </div>
-      </ScrollArea>
-    )
-  }
-
   return (
     <ScrollArea className="flex-1">
-      <SandboxList
-        sandboxes={state.sandboxes}
-        error={state.error}
-        onRetry={() => void load(nodeId)}
-      />
+      <div className="p-2 flex flex-col gap-2">
+        <SpecsSection
+          specs={specsState.specs}
+          loading={specsState.loading}
+          error={specsState.error}
+          onRetry={() => void loadSpecs(nodeId)}
+        />
+        <Separator />
+        <InstancesSection
+          sandboxes={instancesState.sandboxes}
+          loading={instancesState.loading}
+          error={instancesState.error}
+          onRetry={() => void loadInstances(nodeId)}
+        />
+      </div>
     </ScrollArea>
   )
 }
 
-function SandboxList({
+function SectionHeader({ title, count }: { title: string; count?: number }) {
+  return (
+    <div className="flex items-center gap-2 px-1 pt-1">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {title}
+      </span>
+      {count !== undefined && <span className="text-[10px] text-muted-foreground/60">{count}</span>}
+    </div>
+  )
+}
+
+function SpecsSection({
+  specs,
+  loading,
+  error,
+  onRetry,
+}: {
+  specs: SandboxSpecInfo[]
+  loading: boolean
+  error: string | null
+  onRetry: () => void
+}) {
+  if (loading && specs.length === 0) {
+    return (
+      <div>
+        <SectionHeader title="Specs" />
+        <div className="flex flex-col gap-1 p-2">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-6 w-32" />
+        </div>
+      </div>
+    )
+  }
+  if (error !== null && specs.length === 0) {
+    return (
+      <div>
+        <SectionHeader title="Specs" />
+        <div className="flex items-center gap-2 p-2">
+          <span className="text-destructive text-[12px]">Failed to load specs</span>
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div>
+      <SectionHeader title="Specs" count={specs.length} />
+      {specs.length === 0 ? (
+        <div className="text-muted-foreground/50 text-center p-3 text-[12px]">
+          No spec profiles configured
+        </div>
+      ) : (
+        <SpecList specs={specs} />
+      )}
+    </div>
+  )
+}
+
+function SpecList({ specs }: { specs: SandboxSpecInfo[] }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      {specs.map((s) => (
+        <div
+          key={s.name}
+          className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-secondary/50"
+        >
+          <span className="text-[13px] text-foreground truncate">{s.name}</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.5 rounded border flex-shrink-0 ${kindBadgeClass(s.kind)}`}
+          >
+            {s.kind}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function InstancesSection({
+  sandboxes,
+  loading,
+  error,
+  onRetry,
+}: {
+  sandboxes: SandboxInfo[]
+  loading: boolean
+  error: string | null
+  onRetry: () => void
+}) {
+  if (loading && sandboxes.length === 0) {
+    return (
+      <div>
+        <SectionHeader title="Instances" />
+        <div className="flex flex-col gap-1 p-2">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-6 w-32" />
+        </div>
+      </div>
+    )
+  }
+  if (error !== null && sandboxes.length === 0) {
+    return (
+      <div>
+        <SectionHeader title="Instances" />
+        <div className="flex flex-col items-center gap-2 p-3">
+          <span className="text-destructive text-[12px]">Failed to load instances</span>
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div>
+      <SectionHeader title="Instances" count={sandboxes.length} />
+      {sandboxes.length === 0 ? (
+        <div className="text-muted-foreground/50 text-center p-3 text-[12px]">
+          No running sandbox instances
+        </div>
+      ) : (
+        <InstanceList sandboxes={sandboxes} error={error} onRetry={onRetry} />
+      )}
+    </div>
+  )
+}
+
+function InstanceList({
   sandboxes,
   error,
   onRetry,
@@ -129,56 +283,28 @@ function SandboxList({
   error: string | null
   onRetry: () => void
 }) {
-  if (sandboxes.length === 0 && error === null) {
-    return (
-      <div className="text-muted-foreground/70 text-center p-4 text-[13px]">
-        No sandboxes registered
-      </div>
-    )
-  }
   return (
-    <div className="p-2">
-      {/* Mobile: sandbox cards */}
-      <div className="sm:hidden flex flex-col gap-2">
-        {sandboxes.map((s) => (
-          <div key={s.name} className="rounded-lg border border-border bg-secondary p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[14px] font-bold text-foreground truncate">{s.name}</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.5 rounded border flex-shrink-0 ml-2 ${kindBadgeClass(s.kind)}`}
-              >
-                {s.kind}
-              </span>
-            </div>
-            <div className="text-[11px] text-muted-foreground/70 font-mono truncate mt-1">
-              {s.root_path}
-            </div>
+    <div className="flex flex-col gap-0.5">
+      {sandboxes.map((s) => (
+        <div
+          key={s.name}
+          className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-secondary/50"
+        >
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <span className="text-[13px] text-foreground truncate">{s.name}</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded border flex-shrink-0 ${kindBadgeClass(s.kind)}`}
+            >
+              {s.kind}
+            </span>
           </div>
-        ))}
-      </div>
-      {/* Desktop: sandbox rows */}
-      <div className="hidden sm:block font-mono text-[13px]">
-        {sandboxes.map((s) => (
-          <div
-            key={s.name}
-            className="flex items-center justify-between py-1.5 border-b border-[#2a2a44]"
-          >
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <span className="text-[13px] text-foreground truncate">{s.name}</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.5 rounded border flex-shrink-0 ${kindBadgeClass(s.kind)}`}
-              >
-                {s.kind}
-              </span>
-            </div>
-            <div className="text-[11px] text-muted-foreground/70 truncate max-w-[300px] ml-3">
-              {s.root_path}
-            </div>
+          <div className="text-[11px] text-muted-foreground/70 truncate max-w-[200px] ml-2 font-mono">
+            {s.root_path}
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
       {error !== null && (
-        <div className="text-destructive p-2 text-[12px] bg-red-950/30 border border-destructive/50 rounded mt-2">
+        <div className="text-destructive p-2 text-[12px] bg-red-950/30 border border-destructive/50 rounded mt-1">
           Error: {error}
           <Button variant="outline" size="sm" className="ml-2" onClick={onRetry}>
             Retry

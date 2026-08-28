@@ -188,8 +188,10 @@ pub enum TaskOperation {
 /// Sandbox protocol operations.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SandboxOperation {
-    /// List available sandboxes.
+    /// List running sandbox instances.
     List,
+    /// List sandbox spec profiles (templates).
+    ListSpecs,
     /// Execute a command inside the sandbox.
     Exec,
     /// Read file content from the sandbox.
@@ -208,6 +210,7 @@ impl SandboxOperation {
     pub fn method_name(&self) -> &'static str {
         match self {
             Self::List => "sandbox.list",
+            Self::ListSpecs => "sandbox.list_specs",
             Self::Exec => "sandbox.exec",
             Self::ReadFile => "sandbox.read_file",
             Self::WriteFile => "sandbox.write_file",
@@ -385,13 +388,26 @@ pub struct SandboxInfo {
     pub root_path: String,
 }
 
+/// Sandbox spec profile metadata returned by sandbox.list_specs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SandboxSpecInfo {
+    pub name: String,
+    pub kind: String,
+}
+
 /// Sandbox protocol payload — request/response pairs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SandboxPayload {
-    // ── List ──
+    // ── List (instances) ──
     List,
     ListResult {
         sandboxes: Vec<SandboxInfo>,
+    },
+
+    // ── ListSpecs (profiles) ──
+    ListSpecs,
+    ListSpecsResult {
+        specs: Vec<SandboxSpecInfo>,
     },
 
     // ── Exec ──
@@ -921,6 +937,7 @@ impl Payload {
                 }
                 match op {
                     SandboxOperation::List => Ok(Payload::Sandbox(SandboxPayload::List)),
+                    SandboxOperation::ListSpecs => Ok(Payload::Sandbox(SandboxPayload::ListSpecs)),
                     SandboxOperation::Exec => {
                         #[derive(Deserialize)]
                         struct P {
@@ -2781,6 +2798,10 @@ mod tests {
         #[test]
         fn test_sandbox_operation_method_names() {
             assert_eq!(SandboxOperation::List.method_name(), "sandbox.list");
+            assert_eq!(
+                SandboxOperation::ListSpecs.method_name(),
+                "sandbox.list_specs"
+            );
             assert_eq!(SandboxOperation::Exec.method_name(), "sandbox.exec");
             assert_eq!(
                 SandboxOperation::ReadFile.method_name(),

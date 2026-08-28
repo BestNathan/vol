@@ -148,6 +148,10 @@ export interface SandboxInfo {
   kind: string
   root_path: string
 }
+export interface SandboxSpecInfo {
+  name: string
+  kind: string
+}
 export interface McpPromptInfo {
   server: string
   name: string

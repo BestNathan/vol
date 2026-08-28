@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use vol_llm_agent_protocol::agent_server_protocol::{
     AgentServerMessage, Operation, Payload, SandboxInfo, SandboxOperation, SandboxPayload,
+    SandboxSpecInfo,
 };
 use vol_llm_agent_protocol::DomainHandler;
 use vol_llm_agent_protocol::ProtocolError;
@@ -31,6 +32,7 @@ impl DomainHandler for SandboxHandler {
     fn operations(&self) -> Vec<Operation> {
         vec![
             Operation::Sandbox(SandboxOperation::List),
+            Operation::Sandbox(SandboxOperation::ListSpecs),
             Operation::Sandbox(SandboxOperation::Exec),
             Operation::Sandbox(SandboxOperation::ReadFile),
             Operation::Sandbox(SandboxOperation::WriteFile),
@@ -69,6 +71,26 @@ impl DomainHandler for SandboxHandler {
                     mid,
                     Operation::Sandbox(SandboxOperation::List),
                     Payload::Sandbox(SandboxPayload::ListResult { sandboxes }),
+                )])
+            }
+
+            (SandboxOperation::ListSpecs, Payload::Sandbox(SandboxPayload::ListSpecs)) => {
+                // List all sandbox spec profiles
+                let spec_list = self.manager.list_specs().await;
+                let specs: Vec<SandboxSpecInfo> = spec_list
+                    .into_iter()
+                    .map(|spec| {
+                        let kind = spec.provider().to_string();
+                        SandboxSpecInfo {
+                            name: spec.name,
+                            kind,
+                        }
+                    })
+                    .collect();
+                Ok(vec![AgentServerMessage::new_result(
+                    mid,
+                    Operation::Sandbox(SandboxOperation::ListSpecs),
+                    Payload::Sandbox(SandboxPayload::ListSpecsResult { specs }),
                 )])
             }
 
@@ -216,6 +238,9 @@ impl DomainHandler for SandboxHandler {
 
             // Catch-all for mismatched payload types
             (SandboxOperation::List, _) => Err(ProtocolError::PayloadDecodeFailed("sandbox.list")),
+            (SandboxOperation::ListSpecs, _) => {
+                Err(ProtocolError::PayloadDecodeFailed("sandbox.list_specs"))
+            }
             (SandboxOperation::Exec, _) => Err(ProtocolError::PayloadDecodeFailed("sandbox.exec")),
             (SandboxOperation::ReadFile, _) => {
                 Err(ProtocolError::PayloadDecodeFailed("sandbox.read_file"))
@@ -277,7 +302,7 @@ mod tests {
         let manager = Arc::new(SandboxManager::new());
         let handler = SandboxHandler::new(manager);
         let ops = handler.operations();
-        assert_eq!(ops.len(), 7);
+        assert_eq!(ops.len(), 8);
     }
 
     #[tokio::test]
@@ -296,6 +321,56 @@ mod tests {
                 assert_eq!(sandboxes[0].name, "local");
             }
             _ => panic!("expected ListResult"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_list_specs() {
+        let manager = Arc::new(SandboxManager::new());
+        manager
+            .register_provider(Arc::new(vol_llm_sandbox::local::LocalSandboxProvider))
+            .await;
+        // Register a spec profile
+        let spec = vol_llm_sandbox::SandboxSpec {
+            name: "coding".to_string(),
+            config: vol_llm_sandbox::SandboxProviderConfig::Local { work_dir: None },
+            metadata: HashMap::new(),
+        };
+        manager.register_profile(spec).await;
+
+        let handler = SandboxHandler::new(manager);
+        let msg = AgentServerMessage::new_command(
+            "1",
+            Operation::Sandbox(SandboxOperation::ListSpecs),
+            Payload::Sandbox(SandboxPayload::ListSpecs),
+        );
+        let replies = handler.handle(msg).await.unwrap();
+        assert_eq!(replies.len(), 1);
+        match &replies[0].payload {
+            Payload::Sandbox(SandboxPayload::ListSpecsResult { specs }) => {
+                assert_eq!(specs.len(), 1);
+                assert_eq!(specs[0].name, "coding");
+                assert_eq!(specs[0].kind, "local");
+            }
+            _ => panic!("expected ListSpecsResult"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_list_specs_empty() {
+        let manager = Arc::new(SandboxManager::new());
+        let handler = SandboxHandler::new(manager);
+        let msg = AgentServerMessage::new_command(
+            "2",
+            Operation::Sandbox(SandboxOperation::ListSpecs),
+            Payload::Sandbox(SandboxPayload::ListSpecs),
+        );
+        let replies = handler.handle(msg).await.unwrap();
+        match &replies[0].payload {
+            Payload::Sandbox(SandboxPayload::ListSpecsResult { specs }) => {
+                assert!(specs.is_empty());
+            }
+            _ => panic!("expected ListSpecsResult"),
         }
     }
 

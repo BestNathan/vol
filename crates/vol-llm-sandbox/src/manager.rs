@@ -187,6 +187,11 @@ impl SandboxManager {
         Ok(infos)
     }
 
+    /// List all sandbox spec profiles (templates).
+    pub async fn list_specs(&self) -> Vec<crate::SandboxSpec> {
+        self.specs.read().await.values().cloned().collect()
+    }
+
     /// Start a sandbox instance.
     pub async fn start(&self, id: &SandboxId) -> SandboxResult<()> {
         let record = self
