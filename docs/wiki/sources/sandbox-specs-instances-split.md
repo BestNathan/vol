@@ -27,11 +27,10 @@ Split the Sandboxes panel into two sections: **Specs** (loaded profile templates
 - [[vol-llm-sandbox-crate]]: added `SandboxManager::list_specs()`
 - [[vol-llm-agent-protocol-crate]]: added `SandboxOperation::ListSpecs`, `SandboxSpecInfo` wire type
 - [[vol-agent-server-crate]]: handler branch in `SandboxHandler`
-- [[frontend-sandboxes-panel]]: split UI into Specs + Instances sections
 
 ## Concepts Covered
 
-- [[sandbox-lifecycle-refactor]]: specs vs instances distinction from the lifecycle refactor
+- [[sandbox-lifecycle-management-design]]: specs vs instances distinction from the lifecycle refactor
 - [[json-rpc-websocket]]: new RPC method following existing patterns
 
 ## Notes
