@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use vol_llm_sandbox::{
     BackendSandboxRef, Sandbox, SandboxCapabilities, SandboxId, SandboxManager, SandboxProvider,
-    SandboxProviderConfig, SandboxResult, SandboxSpec, SandboxStatus,
+    SandboxProviderConfig, SandboxResult, SandboxSpec, SandboxStatus, DEFAULT_TMP_PROFILE,
 };
 
 /// Mock provider for testing
@@ -220,10 +220,15 @@ async fn test_lifecycle_on_nonexistent_sandbox() {
 }
 
 #[tokio::test]
-async fn test_default_with_existing_sandbox() {
+async fn test_default_ignores_unrelated_sandbox() {
     let manager = SandboxManager::new();
-    let provider = Arc::new(MockProvider::new("local"));
-    manager.register_provider(provider).await;
+    // Register both kinds so `default()` can reach the tmp provider.
+    manager
+        .register_provider(Arc::new(MockProvider::new("local")))
+        .await;
+    manager
+        .register_provider(Arc::new(MockProvider::new("tmp")))
+        .await;
 
     let spec = SandboxSpec {
         name: "test".to_string(),
@@ -232,12 +237,119 @@ async fn test_default_with_existing_sandbox() {
     };
     manager.register_profile(spec).await;
 
-    // Create one sandbox
+    // Exactly one unrelated instance exists.
     let _id = manager.create("test").await.unwrap();
 
-    // Default should return the existing sandbox
+    // `default()` must NOT hand back that unrelated instance just because it
+    // happens to be the only one — it creates its own scratch sandbox.
     let default = manager.default().await.unwrap();
-    assert_eq!(default.kind(), "local");
+    assert_eq!(default.kind(), "local"); // MockProvider always builds LocalSandbox
+
+    let profiles: Vec<String> = manager
+        .list(None)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|i| i.profile)
+        .collect();
+    assert!(
+        profiles.contains(&DEFAULT_TMP_PROFILE.to_string()),
+        "default() should register its own scratch instance, got {profiles:?}"
+    );
+    assert_eq!(
+        profiles.len(),
+        2,
+        "one unrelated + one default, got {profiles:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_default_is_idempotent_with_empty_store() {
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(Arc::new(MockProvider::new("tmp")))
+        .await;
+
+    for _ in 0..5 {
+        manager.default().await.unwrap();
+    }
+
+    assert_eq!(
+        manager.list(None).await.unwrap().len(),
+        1,
+        "repeated default() calls must reuse one instance"
+    );
+}
+
+/// Regression: `default()` used to branch on `store.len() == 1`, so once two
+/// or more records existed every call created and recorded a brand new tmp
+/// sandbox — an unbounded leak, and the handler calls `default()` on every
+/// exec/read/write RPC.
+#[tokio::test]
+async fn test_default_does_not_leak_when_multiple_records_exist() {
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(Arc::new(MockProvider::new("local")))
+        .await;
+    manager
+        .register_provider(Arc::new(MockProvider::new("tmp")))
+        .await;
+
+    for name in ["a", "b"] {
+        manager
+            .register_profile(SandboxSpec {
+                name: name.to_string(),
+                config: SandboxProviderConfig::Local { work_dir: None },
+                metadata: HashMap::new(),
+            })
+            .await;
+        manager.create(name).await.unwrap();
+    }
+    assert_eq!(manager.list(None).await.unwrap().len(), 2);
+
+    let mut sizes = Vec::new();
+    for _ in 0..4 {
+        manager.default().await.unwrap();
+        sizes.push(manager.list(None).await.unwrap().len());
+    }
+
+    assert_eq!(
+        sizes,
+        vec![3, 3, 3, 3],
+        "default() must add at most one scratch instance, never accumulate"
+    );
+
+    let tmp_count = manager
+        .list(None)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|i| i.profile == DEFAULT_TMP_PROFILE)
+        .count();
+    assert_eq!(tmp_count, 1, "exactly one default-tmp record must exist");
+}
+
+#[tokio::test]
+async fn test_default_concurrent_calls_create_one_instance() {
+    let manager = Arc::new(SandboxManager::new());
+    manager
+        .register_provider(Arc::new(MockProvider::new("tmp")))
+        .await;
+
+    let mut handles = Vec::new();
+    for _ in 0..8 {
+        let m = Arc::clone(&manager);
+        handles.push(tokio::spawn(async move { m.default().await.map(|_| ()) }));
+    }
+    for h in handles {
+        h.await.unwrap().unwrap();
+    }
+
+    assert_eq!(
+        manager.list(None).await.unwrap().len(),
+        1,
+        "concurrent default() calls must not each create an instance"
+    );
 }
 
 #[tokio::test]
