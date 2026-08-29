@@ -10,125 +10,123 @@ source_count: 7
 # vol-llm-sandbox Crate
 
 ## Overview
-`vol-llm-sandbox` is the sandbox abstraction and lifecycle management crate. It provides a complete lifecycle management system with explicit instance identity, state tracking, and provider-based backend abstraction. The crate defines the `Sandbox` trait for execution, `SandboxProvider` trait for backend adapters, `SandboxStore` trait for instance metadata, and `SandboxManager` for unified orchestration.
+`vol-llm-sandbox` is the sandbox abstraction: every command and file operation an agent performs is routed through a `Sandbox`, so the same tool code runs against the local filesystem, a temp directory, or a remote host over SSH without knowing which.
 
-## Key Facts
+Conceptual material lives in two concept pages; this page is the **API and usage reference**:
 
-### Architecture (2026-08-27 refactor)
+- [[sandbox-architecture]] — the four layers, provider matrix, config schema, resolution paths
+- [[sandbox-lifecycle]] — lifecycle, state transitions, instance identity, and what is declared vs. reachable
 
-The crate now implements a three-layer architecture:
+## Crate layout
 
-1. **Sandbox trait** — execution and filesystem interface
-2. **SandboxProvider trait** — backend lifecycle adapter
-3. **SandboxManager** — orchestration and instance management
+| Module | Contents |
+|---|---|
+| `lib.rs` | `SandboxId`, `SandboxStatus`, `SandboxCapabilities`, `Sandbox` trait, `CommandRequest`/`CommandOutput`, `SandboxError` |
+| `manager.rs` | `SandboxManager`, `DEFAULT_TMP_PROFILE` |
+| `provider.rs` | `SandboxProvider` trait, `BackendSandboxRef`, `SandboxInfo` |
+| `store.rs` | `SandboxStore` trait, `InMemorySandboxStore`, `SandboxRecord`, `SandboxFilter` |
+| `spec.rs` | `SandboxSpec`, `SandboxProviderConfig`, `SshConfig`, `FirecrackerConfig`, `WasmConfig` — **single schema source** |
+| `local.rs` | `LocalSandbox` + `LocalSandboxProvider` |
+| `tmp.rs` | `TmpSandbox` + `TmpSandboxProvider` |
+| `ssh/` | `SSHSandbox` + `SSHSandboxProvider`, `SshSession` (feature `ssh`) |
+| `firecracker.rs` | `FirecrackerSandbox`, `FirecrackerPool` (feature `firecracker`) — **no provider impl** |
+| `wasm.rs` | `WasmSandbox` (feature `wasm`) — **no provider impl** |
 
+## Core types
+
+| Type | Notes |
+|---|---|
+| `SandboxId` | ULID-based instance identifier, e.g. `sb_01JXYZ...`. Distinct from profile name. |
+| `SandboxStatus` | 11 declared variants; only `Running` and `Stopped` are ever assigned — see [[sandbox-lifecycle]]. |
+| `SandboxCapabilities` | `persistent` / `pausable` / `stoppable` / `destroyable`. **Advisory only** — never enforced. |
+| `SandboxSpec` | `{ name, config: SandboxProviderConfig, metadata }` — a profile template. |
+| `SandboxRecord` | Store row: `{ id, profile, provider_kind, backend_id, status, created_at, updated_at, metadata }`. |
+| `SandboxFilter` | `{ profile, provider_kind, status }` — all optional, ANDed. |
+| `BackendSandboxRef` | `{ backend_id, sandbox }` — what a provider returns from `create()`. |
+
+## `Sandbox` trait
+
+```text
+fn  id() -> &SandboxId
+fn  kind() -> &str
+fn  status() -> SandboxStatus
+fn  root_path() -> Option<&Path>
+fn  resolve_path(rel: &str) -> SandboxResult<PathBuf>
+async execute(CommandRequest) -> SandboxResult<CommandOutput>
+async read_file(path, ..) / write_file(path, &[u8])
+async create_dir_all(path) / read_dir(path) -> Vec<DirEntry> / metadata(path) -> FileMetadata
 ```
-Agent Session
-  sandbox_id = sb_123
-        │
-        ▼
-SandboxManager (orchestration)
-        │
-        ├── SandboxStore (metadata)
-        │     sb_123 -> {provider: local, backend_id: ..., status: Running}
-        │
-        ▼
-SandboxProvider (backend adapter)
-        │
-   ┌────┼──────────────┐
-   ▼    ▼              ▼
-Local  Tmp           SSH
-Provider Provider    Provider
+
+`root_path()` is `Option` because not every backend has a meaningful local path.
+
+Removed in the 2026-08-27 refactor: `name()`, `start()`, `cleanup()`, `bind_metadata()` — these moved to the provider/manager layer.
+
+### Path resolution contract
+- `resolve_path` rejects absolute paths (`/...`) and `~` paths in every implementation.
+- `ToolContext::resolve_path` converts absolute paths that fall inside the sandbox root to relative before delegating, so tools can keep passing absolute paths (e.g. from `tempfile`) while sandboxes see consistent relative input.
+
+## `SandboxProvider` trait
+
+```text
+fn  kind() -> &str
+fn  capabilities() -> SandboxCapabilities
+async create(spec) -> BackendSandboxRef
+async get(backend_id) -> Arc<dyn Sandbox>
+async list() -> Vec<SandboxInfo>
+async start / pause / resume / stop / destroy (backend_id)
 ```
 
-### Core Types
+`pause` and `resume` exist here but have **no counterpart on `SandboxManager`**, so they are unreachable through normal use.
 
-- **SandboxId** — ULID-based stable instance identifier (e.g., "sb_01JXYZ...")
-- **SandboxStatus** — lifecycle states: Creating, Created, Starting, Running, Pausing, Paused, Stopping, Stopped, Destroying, Destroyed, Failed
-- **SandboxCapabilities** — discoverable backend capabilities: persistent, pausable, stoppable, destroyable
-- **SandboxSpec** — profile specification with provider-specific config
-- **SandboxRecord** — instance metadata stored in SandboxStore
+## `SandboxManager` API
 
-### Sandbox trait (updated 2026-08-27)
-- `id()` — stable instance identifier
-- `kind()` / `status()` / `root_path()` — identity, status, and root path
-- `resolve_path(rel)` → absolute path within root. Rejects absolute paths and `~`
-- `execute(CommandRequest)` / `read_file` / `write_file` / `create_dir_all` / `read_dir` / `metadata`
-- Removed: `name()`, `start()`, `cleanup()`, `bind_metadata()` (moved to provider/manager)
+The sole sandbox resolution path since 2026-08-28 (`SandboxRegistry` deleted).
 
-### SandboxProvider trait
-Backend lifecycle adapter with methods:
-- `kind()` / `capabilities()` — backend identification and capability discovery
-- `create(spec)` / `get(backend_id)` / `list()` — instance management
-- `start()` / `pause()` / `resume()` / `stop()` / `destroy()` — lifecycle operations
+**Setup**
 
-### SandboxStore trait
-Instance metadata persistence:
-- `insert()` / `get()` / `list()` / `update_status()` / `delete()`
-- `InMemorySandboxStore` — HashMap-based implementation
-- Future: SQLite/Postgres implementations
+| Method | Purpose |
+|---|---|
+| `register_provider(provider)` | register a backend by `kind()` |
+| `register_profile(spec)` | add a profile programmatically |
+| `load_profiles(dir)` | parse `.agents/sandboxes/*.toml` into specs; per-file failures warn+skip |
 
-### SandboxManager
-Unified orchestration service — **the sole sandbox resolution path** since 2026-08-28 (`SandboxRegistry` deleted).
+**Profile-oriented (by name)** — this is what production uses
 
-Instance-oriented (by `SandboxId`):
-- `create(profile)` / `get(id)` / `list(filter)` — instance management
-- `start()` / `stop()` / `destroy()` — lifecycle operations with state validation
-- `register_instance(spec, sandbox)` — adopt a pre-existing sandbox
+| Method | Records in store? | Purpose |
+|---|---|---|
+| `acquire_by_name(name)` | No | cache hit, else create via provider and cache. Returns `Option`. |
+| `preload(dir)` | No | `load_profiles()` then eagerly instantiate each; per-profile failures warn+skip |
+| `build_inline(spec)` | No | one-off, uncached — for cli-tool inline `[sandbox]` blocks |
+| `default_tmp()` | No | fresh `TmpSandbox`, falling back to `LocalSandbox` |
+| `default()` | Yes | the idempotent scratch sandbox keyed on `DEFAULT_TMP_PROFILE` |
 
-Profile-oriented (by name) — added 2026-08-28, absorbed from `SandboxRegistry`:
-- `acquire_by_name(name)` — profile-name lookup; cache hit, else create via provider and cache
-- `preload(dir)` — `load_profiles()` then eagerly instantiate every profile; per-profile failures warn+skip
-- `build_inline(spec)` — one-off sandbox from a spec, not cached or tracked (cli-tool inline `[sandbox]`)
-- `default_tmp()` — fresh `TmpSandbox`, falling back to `LocalSandbox`
-- `default()` — the implicit scratch sandbox, keyed on the reserved `DEFAULT_TMP_PROFILE` (`"default-tmp"`) profile. Idempotent and mutex-serialized: at most one such instance exists regardless of other store contents, and an unrelated instance is never returned. Source: [[sandbox-default-idempotency]].
+**Instance-oriented (by `SandboxId`)**
 
-**Which providers have instance identity?** `backend_id` is a pure function of the spec for `local` (work dir path) and `ssh` (`user@host`) — two instances from one spec are interchangeable, so there is nothing to record. `tmp` (random `/tmp/<x>`) and `firecracker` (VM id) carry real per-instance state. This is why `sandbox.list` is legitimately empty when every configured profile is local or ssh; `sandbox.list_specs` is the right call for "what is configured".
+| Method | Purpose |
+|---|---|
+| `create(profile)` | full create + record + cache. **Zero production callers** — tests only. |
+| `get(id)` | record → cache hit → else `provider.get(backend_id)` |
+| `list(filter)` | reads the **store**; enriches with `capabilities()` and cached `root_path()` |
+| `list_specs()` | reads the **spec map** — the right call for "what is configured" |
+| `start(id)` / `stop(id)` | validated transition + provider delegation + status update |
+| `destroy(id)` | provider destroy, evict cache, prune name index, delete record. **No validation.** |
+| `register_instance(spec, sandbox)` | adopt a pre-existing sandbox into the store |
 
-Setup:
-- `load_profiles(dir)` — loads `.agents/sandboxes/*.toml` as `SandboxSpec`
-- `register_profile(spec)` — programmatic profile registration
-- `register_provider(provider)` — backend registration
+Internal maps: `specs`, `instances` (by `backend_id`), `store` (by `SandboxId`), and a `name_to_backend` index maintained by `create()` / `acquire_by_name()` / `register_instance()` and pruned by `destroy()`.
 
-A `name_to_backend` index maps profile name → `backend_id`, maintained by `create()` / `acquire_by_name()` / `register_instance()` and pruned by `destroy()`.
-
-`preload()` is safe at startup even for SSH profiles: `SshSession::new()` only stores config, connecting lazily on first use.
-
-### Implementations
+## Implementations
 
 | Type | Kind | Provider | Root | Use case |
-|------|------|----------|------|----------|
-| `LocalSandbox` | `"local"` | `LocalSandboxProvider` | `Some(path)` = fixed dir, `None` = random temp | Development, testing, DP nodes |
-| `TmpSandbox` | `"tmp"` | `TmpSandboxProvider` | `/tmp/{sub_dir}/` | Agent sandboxes, default fallback |
-| `SSHSandbox` | `"ssh"` | `SSHSandboxProvider` | Remote `work_dir` | Remote execution via SSH |
-| `FirecrackerSandbox` | `"firecracker"` | (updated) | VM rootfs | Full VM isolation (Linux/KVM) |
-| `WasmSandbox` | `"wasm"` | (updated) | Work dir preopened as `/` | Secure wasm module execution |
+|---|---|---|---|---|
+| `LocalSandbox` | `local` | `LocalSandboxProvider` | `Some(path)`, or random temp if `None` | Development, testing, DP nodes |
+| `TmpSandbox` | `tmp` | `TmpSandboxProvider` | `/tmp/{sub_dir}/` | Scratch space, `default()` fallback |
+| `SSHSandbox` | `ssh` | `SSHSandboxProvider` | remote `work_dir` | Remote execution |
+| `FirecrackerSandbox` | `firecracker` | **none** | VM rootfs | Not currently usable via the manager |
+| `WasmSandbox` | `wasm` | **none** | work dir preopened as `/` | Not currently usable via the manager |
 
-### Provider Capabilities
+## Configuration
 
-| Provider | Persistent | Pausable | Stoppable | Destroyable |
-|----------|------------|----------|-----------|-------------|
-| Local | ✓ | ✗ | ✗ | ✗ |
-| Tmp | ✗ | ✗ | ✗ | ✓ |
-| SSH | ✓ | ✗ | ✗ | ✗ |
-
-### Configuration Format
-
-`spec.rs` is the **single schema source** for `.agents/sandboxes/*.toml` (since 2026-08-28 — the parallel `registry.rs` schema is gone).
-
-```toml
-name = "devbox"
-provider = "ssh"
-work_dir = "/workspace"
-host = "10.0.0.10"
-user = "nathan"
-key_path = "/app/.ssh/id_ed25519"
-host_key = "SHA256:..."          # or known_hosts_file
-idle_timeout_secs = 300           # default 300
-connect_timeout_secs = 10         # default 10
-```
-
-`SandboxProviderConfig` is a serde internally-tagged enum on `provider`. All five variants carry a shared `work_dir`, readable uniformly via `SandboxProviderConfig::work_dir()`.
+`spec.rs` is the single schema source. `SandboxProviderConfig` is a serde internally-tagged enum on `provider`; every variant carries `work_dir`, but there is **no** uniform accessor for it — read it via the variant or the `as_*` helper.
 
 | Variant | Layout |
 |---|---|
@@ -138,50 +136,66 @@ connect_timeout_secs = 10         # default 10
 | `firecracker` | nested `[firecracker]` table |
 | `wasm` | nested `[wasm]` table + a `wasm.modules` array-of-tables |
 
-Extraction helpers: `as_local()` / `as_tmp()` / `as_ssh()` / `as_firecracker()` / `as_wasm()`.
+Extraction helpers: `as_local()` / `as_tmp()` / `as_ssh()` (return owned config structs), `as_firecracker()` / `as_wasm()` (return references).
 
-Changes from the pre-2026-08-27 format:
-- `type` → `provider`
-- SSH config flattened (no `[ssh]` subtable)
-- `identity_file` → `key_path` (the old spelling still parses as a serde alias; `as_ssh()` resolves `key_path.or(identity_file)`)
+Full schema with examples and defaults: [[sandbox-architecture]].
 
-`FirecrackerConfig` / `WasmConfig` / `WasmModuleConfig` live in `spec.rs` **without** feature gates — the type definitions are always available, so config parsing does not depend on which features are compiled.
+`FirecrackerConfig` / `WasmConfig` / `WasmModuleConfig` live in `spec.rs` **without** feature gates, so config parsing never depends on which features are compiled.
 
-### Path resolution contract
-- All `resolve_path` implementations reject absolute paths (`/...`) and `~` paths
-- `ToolContext::resolve_path` converts absolute paths within the sandbox root to relative before delegation
-- This keeps tools working with absolute paths (e.g. from `tempfile`) while sandboxes see consistent relative input
+## Usage
+
+### Resolve a named profile
+
+```text
+let sandbox = manager.acquire_by_name("ansible-prod").await
+    .ok_or("profile not found or provider missing")?;
+let out = sandbox.execute(CommandRequest::new("ansible --version")).await?;
+```
+
+`acquire_by_name` returns `Option` — `None` covers both "no such profile" and "provider create failed", and logs a warning in the latter case.
+
+### Wire up a manager from scratch
+
+```text
+let manager = SandboxManager::new();
+manager.register_provider(Arc::new(LocalSandboxProvider)).await;
+manager.register_provider(Arc::new(TmpSandboxProvider)).await;
+manager.register_provider(Arc::new(SSHSandboxProvider::new())).await;
+manager.preload(Path::new(".agents/sandboxes")).await?;
+```
+
+Forgetting a `register_provider` is a silent failure: profiles of that kind parse fine, then fail to instantiate, and `preload()` warns and skips them.
 
 ### Runtime integration
-- `AgentRuntimeBuilder::build()` creates `SandboxManager`, registers Local/Tmp/SSH providers, registers a `"local"` profile pointing at `working_dir`, then calls `preload()`
-- `"local"` is an ordinary profile via `register_profile()`, not a special case — it resolves through the same path as disk-loaded profiles
-- `DataPlaneServerCore` reuses `runtime.sandbox_manager` rather than constructing its own, so control-plane `sandbox.*` operations and data-plane tool execution observe the same instances
-- ReAct tool loop resolves per call: `ToolConfig.get_sandbox(tool)` → `AgentDef.sandbox` → `"local"`, via `acquire_by_name().await` with `default_tmp().await` fallback
-- Agents use `sandbox = "local"` → `/app/` on DP nodes
-- `cli-tools-mcp` builds its own manager, registers providers, and calls `preload()`
 
-## Modules
-- `lib.rs` — Core types: `SandboxId`, `SandboxStatus`, `SandboxCapabilities`, `Sandbox` trait
-- `manager.rs` — `SandboxManager` orchestration service
-- `provider.rs` — `SandboxProvider` trait, `BackendSandboxRef`, `SandboxInfo`
-- `store.rs` — `SandboxStore` trait, `InMemorySandboxStore`, `SandboxRecord`, `SandboxFilter`
-- `spec.rs` — `SandboxSpec`, `SandboxProviderConfig`, `SshConfig`, `FirecrackerConfig`, `WasmConfig` — single schema source
-- `local.rs` — `LocalSandbox` + `LocalSandboxProvider`
-- `tmp.rs` — `TmpSandbox` + `TmpSandboxProvider`
-- `ssh/` — `SSHSandbox` + `SSHSandboxProvider` (feature = "ssh")
-- `firecracker.rs` — `FirecrackerSandbox` (feature = "firecracker")
-- `wasm.rs` — `WasmSandbox` (feature = "wasm")
+- `AgentRuntimeBuilder::build()` is the authoritative assembly point: registers `local`/`tmp`/`ssh`, registers a `"local"` profile pointing at `working_dir`, then `preload()`s.
+- `"local"` is an ordinary profile via `register_profile()`, not a special case — it resolves through the same path as disk-loaded profiles.
+- `DataPlaneServerCore` reuses `runtime.sandbox_manager` rather than constructing its own, so control-plane `sandbox.*` operations and data-plane tool execution observe the same instances.
+- `cli-tools-mcp` builds its own manager, registers the same three providers, and calls `preload()`.
+
+### How callers select a sandbox
+
+ReAct tool loop, in precedence order: `ToolConfig.get_sandbox(tool)` → `AgentDef.sandbox` → literal `"local"`; then `acquire_by_name()` with a `default_tmp()` fallback.
+
+cli-tool configs set exactly one of `sandbox_ref = "<profile>"` (via `acquire_by_name`) or an inline `[sandbox]` table (via `build_inline`). Both or neither is a config error.
+
+Agents using `sandbox = "local"` land in `/app/` on DP nodes.
 
 ## Known gaps
-- `InMemorySandboxStore` only — instance metadata does not survive restart
-- No `SandboxProvider` implementation for `firecracker` or `wasm`; their spec variants parse, but `preload()` warns and skips those profiles for lack of a registered provider
-- `SSHSandboxProvider::get(backend_id)` returns `NotFound` unconditionally — only the `instances` cache resolves SSH sandboxes after creation
+- `InMemorySandboxStore` is the only store — instance metadata does not survive restart, so any `SandboxId` becomes unresolvable after one.
+- No `SandboxProvider` for `firecracker` or `wasm`. Their spec variants parse, then `preload()` warns and skips for lack of a registered provider.
+- `SSHSandboxProvider::get(backend_id)` returns `NotFound` unconditionally — only the `instances` cache resolves SSH sandboxes after creation.
+- No `pause`/`resume` on `SandboxManager`, so `Pausing`/`Paused` are unreachable.
+- `SandboxCapabilities` is never enforced; `destroy()` skips both capability checks and transition validation.
+- No lifecycle operation is exposed on the `sandbox.*` RPC surface.
+- `preload()`'s eager instantiation is unnecessary and, for SSH, net-negative — see [[sandbox-lifecycle]].
 
 ## Timeline
 - **2026-06-17**: Initial sandbox abstraction, LocalSandbox, SSHSandbox, FirecrackerSandbox
 - **2026-08-11**: TmpSandbox added; resolve_path unified; bind_metadata trait method; registry simplified
 - **2026-08-19**: LocalSandbox timeout kill reworked — positive-pid kills only
 - **2026-08-25**: SandboxHandler refactored to accept `Arc<SandboxRegistry>` for listing all sandboxes
-- **2026-08-27**: **Major refactor** — explicit lifecycle management with SandboxManager, SandboxProvider, SandboxStore, SandboxId, SandboxStatus, SandboxCapabilities. All implementations updated. 98%+ test coverage achieved.
-- **2026-08-28**: `SandboxManager::default()` made idempotent — it previously branched on the *total* store record count, so with >=2 records it created and registered a new tmp sandbox on every call (unbounded leak via the handler's six ops), and with exactly 1 record it returned that unrelated instance. Now keyed on the reserved `DEFAULT_TMP_PROFILE` and serialized by `default_lock`. See [[sandbox-default-idempotency]].
+- **2026-08-27**: **Major refactor** — explicit lifecycle management with SandboxManager, SandboxProvider, SandboxStore, SandboxId, SandboxStatus, SandboxCapabilities. All implementations updated.
 - **2026-08-28**: **`SandboxRegistry` deleted** — `SandboxManager` is now the sole resolution path. `spec.rs` became the single schema source: SSH gained `host_key` / `known_hosts_file` / `passphrase` / timeout fields, `Firecracker` / `Wasm` variants added, all variants carry `work_dir`. `SSHSandboxProvider` dropped its `configs: Vec<SshConfig>` workaround and reads spec fields directly. Manager gained `acquire_by_name` / `preload` / `build_inline` / `default_tmp`. Fixes [[schema-drift]] that had `cli-tools-mcp` registering zero tools — see [[sandbox-registry-manager-unification]].
+- **2026-08-28**: `SandboxManager::default()` made idempotent — it previously branched on the *total* store record count, so with >=2 records it created and registered a new tmp sandbox on every call (unbounded leak via the handler's six ops), and with exactly 1 record it returned that unrelated instance. Now keyed on the reserved `DEFAULT_TMP_PROFILE` and serialized by `default_lock`. See [[sandbox-default-idempotency]].
+- **2026-08-28**: Documentation audit — [[sandbox-architecture]] created as the entry point; [[sandbox-lifecycle]] rewritten around declared-vs-reachable behavior after probing found only `Running`/`Stopped` are ever assigned, no `pause`/`resume` exists on the manager, `destroy()` skips validation, and capabilities are never enforced.

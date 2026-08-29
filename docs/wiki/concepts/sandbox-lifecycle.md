@@ -1,233 +1,150 @@
 ---
 type: concept
 category: architecture
-tags: [sandbox, lifecycle, manager, provider, store, state-machine, capability-discovery]
+tags: [sandbox, lifecycle, manager, state-machine, instance-identity, status]
 created: 2026-08-11
 updated: 2026-08-28
-source_count: 3
+source_count: 4
 ---
 
 # Sandbox Lifecycle Management
 
-## Overview
-The sandbox system implements explicit instance lifecycle management with stable instance identity, state tracking, and provider-based backend abstraction. The architecture separates concerns into three layers: execution interface (`Sandbox`), backend adapters (`SandboxProvider`), and orchestration (`SandboxManager`).
+For the layer diagram, provider matrix, config schema, and resolution paths, see [[sandbox-architecture]]. This page covers **lifecycle and state transitions** specifically.
 
-## Architecture
+## The short version
 
-```
-Agent Session
-  sandbox_id = sb_123
-        │
-        ▼
-SandboxManager (orchestration)
-        │
-        ├── SandboxStore (metadata)
-        │     sb_123 -> {provider: local, backend_id: ..., status: Running}
-        │
-        ▼
-SandboxProvider (backend adapter)
-        │
-   ┌────┼──────────────┐
-   ▼    ▼              ▼
-Local  Tmp           SSH
-Provider Provider    Provider
-        │
-        ▼
-   Sandbox instances
-```
+The declared lifecycle is an 11-state machine with `pause`/`resume`, capability gating, and validated transitions. **The reachable lifecycle is two states.** Understanding the gap is the point of this page, because the code, the type definitions, and the older wiki pages all describe the declared shape.
 
-## Lifecycle States
+| | Declared | Actually reachable |
+|---|---|---|
+| States | 11 (`Creating`…`Failed`) | **`Running`, `Stopped`** |
+| Manager verbs | `create` / `start` / `stop` / `destroy` / (`pause`/`resume` in the transition table) | `create` / `start` / `stop` / `destroy` — **no `pause`/`resume` method exists** |
+| Transition validation | on every operation | on `start` and `stop` only — **`destroy` skips it entirely** |
+| Capability enforcement | backends declare limits, orchestration respects them | **never enforced** — read once for reporting in `list()` |
+| RPC lifecycle ops | — | **none on the wire** |
 
-```
-Created
-   │ start
-   ▼
-Running ── pause ──► Paused
-   ▲                   │
-   └──── resume ───────┘
+## Instance identity: what is worth tracking
 
-Running / Paused
-   │ stop
-   ▼
-Stopped
-   │ destroy
-   ▼
-Destroyed
-```
+This decides whether a lifecycle even applies.
 
-**Valid transitions:**
-- `Creating → Created → Starting → Running`
-- `Running → Pausing → Paused → Starting → Running` (resume)
-- `Running/Paused → Stopping → Stopped`
-- `Stopped → Destroying → Destroyed`
-- Any state → `Failed` (on error)
+A store record only carries information when the instance holds state the spec does not. `backend_id` is a **pure function of the spec** for `local` (the work dir path) and `ssh` (`user@host`) — build the same spec twice and you get two interchangeable objects, so there is nothing to track. `tmp` (a random `/tmp/<x>` path) and `firecracker` (a VM id) do carry per-instance state.
 
-`SandboxManager` enforces these transitions and rejects invalid ones.
+Consequences:
 
-## Key Components
+- `sandbox.list` (reads the store) is **legitimately empty** in a deployment whose profiles are all local/ssh. `sandbox.list_specs` (reads the spec map) answers "what is configured".
+- Manufacturing store records for local/ssh just to populate `list` would invent identity that does not exist — and would trip the leak described in [[sandbox-default-idempotency]].
+- `SSHSandboxProvider::get(backend_id)` always returns `NotFound`: an SSH instance cannot be reconstructed from its `backend_id`, which is the same fact from the other direction.
 
-### SandboxId
-ULID-based stable instance identifier (e.g., `sb_01JXYZ...`). Distinct from profile name. Used for tracking instances across operations.
+## States
 
-### SandboxStatus
-Explicit lifecycle states: `Creating`, `Created`, `Starting`, `Running`, `Pausing`, `Paused`, `Stopping`, `Stopped`, `Destroying`, `Destroyed`, `Failed`.
+`SandboxStatus` declares eleven variants: `Creating`, `Created`, `Starting`, `Running`, `Pausing`, `Paused`, `Stopping`, `Stopped`, `Destroying`, `Destroyed`, `Failed`.
 
-### SandboxCapabilities
-Discoverable backend capabilities:
-- `persistent` — survives process restart
-- `pausable` — supports pause/resume
-- `stoppable` — supports stop (preserves workspace)
-- `destroyable` — supports destroy (removes resources)
+**Only `Running` and `Stopped` are ever written by any code in `src/`.** The nine transitional and terminal states — including `Failed` — are declared but never assigned. `create()` inserts a record already at `Running`; it never passes through `Creating`/`Created`.
 
-Provider-specific defaults:
-| Provider | Persistent | Pausable | Stoppable | Destroyable |
-|----------|------------|----------|-----------|-------------|
-| Local | ✓ | ✗ | ✗ | ✗ |
-| Tmp | ✗ | ✗ | ✗ | ✓ |
-| SSH | ✓ | ✗ | ✗ | ✗ |
+## Transitions
 
-### SandboxProvider Trait
-Backend lifecycle adapter with methods:
-- `kind()` / `capabilities()` — backend identification and capability discovery
-- `create(spec)` / `get(backend_id)` / `list()` — instance management
-- `start()` / `pause()` / `resume()` / `stop()` / `destroy()` — lifecycle operations
+`validate_transition(from, to)` encodes 17 pairs plus `(_, Failed)`. But the manager only ever calls it with `to = Running` (from `start()`) or `to = Stopped` (from `stop()`), so most pairs are unreachable. What actually happens:
 
-### SandboxStore Trait
-Instance metadata persistence:
-- `insert()` / `get()` / `list()` / `update_status()` / `delete()`
-- `InMemorySandboxStore` — HashMap-based implementation
-- Future: SQLite/Postgres implementations for persistence
-
-### SandboxManager
-Unified orchestration service:
-- `load_profiles(dir)` — loads `.agents/sandboxes/*.toml`
-- `register_profile(spec)` / `register_instance(spec, sandbox)` — registration
-- `create(profile)` / `get(id)` / `list(filter)` — instance management
-- `start()` / `stop()` / `destroy()` — lifecycle operations with state validation
-- `default()` — returns single instance or creates fresh TmpSandbox
-
-## Lifecycle Flow
-
-### 1. Profile Definition
-Sandbox profiles defined in `.agents/sandboxes/*.toml`:
-```toml
-name = "devbox"
-provider = "ssh"
-work_dir = "/workspace"
-host = "10.0.0.10"
-user = "nathan"
+```text
+            create()
+               │
+               ▼
+         ┌──────────┐   stop()    ┌──────────┐
+         │ Running  │────────────►│ Stopped  │
+         │          │◄────────────│          │
+         └────┬─────┘   start()   └────┬─────┘
+              │                        │
+              │      destroy()         │
+              └───────────┬────────────┘
+                          ▼
+                 record deleted, handle
+                 evicted, name unmapped
+                 (no state validation)
 ```
 
-### 2. Profile Loading
-`SandboxManager::load_profiles(dir)` reads TOML files and parses them as `SandboxSpec`.
+| Call | From | Result |
+|---|---|---|
+| `start()` | `Running` | **fails** — `InvalidTransition: Running -> Running` |
+| `start()` | `Stopped` | ok → `Running` |
+| `stop()` | `Running` | ok → `Stopped` |
+| `stop()` | `Stopped` | **fails** — `InvalidTransition: Stopped -> Stopped` |
+| `destroy()` | any state | ok — no validation performed |
 
-### 3. Instance Creation
-```rust
-let id = manager.create("devbox").await?;
-// SandboxManager:
-//   1. Looks up spec by profile name
-//   2. Routes to correct provider
-//   3. Provider creates backend instance
-//   4. Stores record in SandboxStore
-//   5. Caches sandbox handle
-//   6. Returns SandboxId
-```
+Two consequences worth internalizing:
 
-### 4. Instance Retrieval
-```rust
-let sandbox = manager.get(&id).await?;
-// SandboxManager:
-//   1. Looks up record from SandboxStore
-//   2. Checks instance cache
-//   3. Falls back to provider.get(backend_id)
-//   4. Returns Arc<dyn Sandbox>
-```
+**`start()` after `create()` always fails.** `create()` lands the record at `Running`, and `(Running, Running)` is not a valid pair. The declared `Created → Starting → Running` path is unreachable because `Created` is never assigned. A freshly created sandbox is already usable; calling `start()` on it is an error.
 
-### 5. Lifecycle Operations
-```rust
-manager.stop(&id).await?;
-// SandboxManager:
-//   1. Validates state transition (Running → Stopped)
-//   2. Delegates to provider.stop(backend_id)
-//   3. Updates status in SandboxStore
-```
+**`destroy()` ignores the state machine and the capability flags.** It never calls `validate_transition`, so it succeeds from `Running` even though the table only permits `Stopped → Destroying`. It also does not consult `capabilities().destroyable`, which is `false` for both `local` and `ssh` — those providers' `destroy()` is simply a no-op that returns `Ok(())`, and the manager then deletes the record regardless.
 
-### 6. Instance Destruction
-```rust
-manager.destroy(&id).await?;
-// SandboxManager:
-//   1. Delegates to provider.destroy(backend_id)
-//   2. Removes from instance cache
-//   3. Deletes record from SandboxStore
-```
+### `stop()` on local/ssh is bookkeeping only
 
-## Key Design Decisions
+`LocalSandboxProvider::stop()` returns `Ok(())` without doing anything, and `get()` on a stopped instance still hands back a **fully working** handle. So `stop()` flips a status field and nothing else — it does not prevent execution. This is consistent with `stoppable: false` in those providers' capabilities, but nothing enforces it: the status change is accepted and the sandbox keeps working.
 
-### Separation of Concerns
-- **Sandbox trait** — execution and filesystem interface only
-- **SandboxProvider** — backend-specific lifecycle management
-- **SandboxManager** — orchestration and instance tracking
-- **SandboxStore** — metadata persistence
+## Capabilities are advisory
 
-### Stable Instance Identity
-`SandboxId` is distinct from profile name. Multiple instances can be created from the same profile. Instances can be tracked across operations and sessions.
+`SandboxCapabilities { persistent, pausable, stoppable, destroyable }` is intended for a UI to decide which lifecycle actions to offer.
 
-### Backend-Agnostic Orchestration
-Agent/Tool code operates on `SandboxId` and `Sandbox` interface. Backend-specific lifecycle behavior is encapsulated in providers.
+| Provider | persistent | pausable | stoppable | destroyable |
+|---|---|---|---|---|
+| `local` | ✓ | ✗ | ✗ | ✗ |
+| `tmp` | ✗ | ✗ | ✗ | ✓ |
+| `ssh` | ✓ | ✗ | ✗ | ✗ |
 
-### Capability Discovery
-`SandboxCapabilities` allows UI/runtime to expose correct lifecycle actions. Backends declare what they support; orchestration respects those limits.
+`firecracker` and `wasm` declare no capabilities because they have no `SandboxProvider` impl at all.
 
-### State Transition Validation
-`SandboxManager` validates all state transitions. Invalid transitions return errors. This prevents undefined behavior.
+The manager reads `capabilities()` in exactly one place — building `SandboxInfo` for `list()` — and never to gate an operation. `stop()` and `destroy()` both proceed on providers that declare they cannot be stopped or destroyed. Treat the flags as documentation of *intent*, not as a guarantee.
 
-### Default Sandbox Behavior
-`manager.default()` returns the single existing instance if exactly one exists, otherwise creates a fresh TmpSandbox. This maintains backward compatibility.
+## Operation walkthroughs
 
-## Configuration Format
+### `create(profile) -> SandboxId`
 
-Old format (deprecated):
-```toml
-name = "devbox"
-type = "ssh"
-work_dir = "/workspace"
+1. look up the spec by profile name (`NotFound` if absent)
+2. look up the provider by `spec.provider()` (`UnknownType` if unregistered)
+3. `provider.create(spec)` → `BackendSandboxRef { backend_id, sandbox }`
+4. insert a `SandboxRecord` at status `Running` with a fresh ULID `SandboxId`
+5. cache the handle in `instances[backend_id]` and index `name_to_backend[profile]`
 
-[ssh]
-host = "10.0.0.10"
-user = "nathan"
-identity_file = "/app/.ssh/id_ed25519"
-```
+Note: **no production code calls this.** Real resolution goes through `acquire_by_name()`, which performs steps 1–3 and 5 but *not* step 4 — hence the empty `sandbox.list`.
 
-New format:
-```toml
-name = "devbox"
-provider = "ssh"
-work_dir = "/workspace"
-host = "10.0.0.10"
-user = "nathan"
-key_path = "/app/.ssh/id_ed25519"
-```
+### `get(id) -> Arc<dyn Sandbox>`
 
-Changes:
-- `type` → `provider`
-- SSH config flattened (no `[ssh]` section)
-- `identity_file` → `key_path` (old spelling still parses as a serde alias)
+1. load the record (`NotFound` if absent)
+2. return `instances[record.backend_id]` on a cache hit
+3. otherwise `provider.get(backend_id)` and cache the result
 
-Since 2026-08-28 `spec.rs` is the single schema source and `SandboxManager` the sole resolution path — the parallel `SandboxRegistry` loader was deleted after its stale schema caused [[schema-drift]]. `SandboxManager` gained profile-name lookup (`acquire_by_name` / `preload` / `build_inline` / `default_tmp`) alongside instance-ID lookup.
+Step 3 is where the identity distinction bites: it works for `local` and `tmp` (both reconstruct from a path) but always fails for `ssh`.
 
-### Which providers have instance identity?
+### `stop(id)` / `start(id)`
 
-Recording an instance in the `SandboxStore` only makes sense when the instance carries state that the spec does not. `backend_id` is a pure function of the spec for `local` (the work dir path) and `ssh` (`user@host`) — build the same spec twice and you get two interchangeable objects, so there is no instance to track. `tmp` (a random `/tmp/<x>` path) and `firecracker` (a VM id) do carry per-instance state.
+Load record → `validate_transition` → delegate to the provider → `store.update_status`. If the provider call fails the status is not updated, so a failed stop leaves the record at `Running`.
 
-Consequence: `sandbox.list` is legitimately empty when every configured profile is local or ssh. "What sandboxes are configured?" is answered by `sandbox.list_specs`, which reads the spec map. Manufacturing store records for local/ssh just to populate `list` would be inventing identity that does not exist — and would have tripped the `default()` leak described in [[sandbox-default-idempotency]].
+### `destroy(id)`
+
+Load record → `provider.destroy(backend_id)` → evict `instances[backend_id]` → drop every `name_to_backend` entry pointing at that `backend_id` → `store.delete(id)`. No state validation, no capability check.
+
+### `default()`
+
+Returns the implicit scratch sandbox, keyed on the reserved `DEFAULT_TMP_PROFILE` (`"default-tmp"`) profile and serialized by a mutex, so it is idempotent: at most one such instance exists regardless of what else is in the store, and an unrelated instance is never returned. This is the only lifecycle path reachable over the RPC surface, since `SandboxHandler` calls it for all six of its I/O operations. Its previous count-based form leaked a record per call — see [[sandbox-default-idempotency]].
+
+## Durability
+
+`InMemorySandboxStore` is the only `SandboxStore` implementation, so **all instance records are lost on restart**. Profiles are re-read from disk and re-instantiated by `preload()`, so recovery is automatic for named profiles — but any `SandboxId` handed out before a restart becomes permanently unresolvable. A persistent store (SQLite/Postgres) is a natural extension; the trait boundary already exists for it.
+
+## Known gaps
+
+- `pause`/`resume` exist on `SandboxProvider` and in the transition table but have **no `SandboxManager` method**, so `Pausing`/`Paused` are unreachable.
+- `Failed` is never assigned, so a failed instance is indistinguishable from a healthy one in the store.
+- `destroy()` bypasses both transition validation and capability checks.
+- Capability flags are never enforced.
+- No lifecycle operation is exposed over the `sandbox.*` RPC surface, so none of this is drivable from the frontend.
+- `preload()` eagerly instantiates every profile at startup, which is unnecessary (`acquire_by_name()` already creates lazily) and for SSH is net-negative: `SSHSandbox::new()` spawns a 1-second-tick idle task that lives as long as the `Arc`, while `create()` never calls `start()`, so no connection is actually warmed.
 
 ## Related
-- [[vol-llm-sandbox-crate]] — implementation details
+- [[sandbox-architecture]] — layers, providers, config schema, resolution paths
+- [[vol-llm-sandbox-crate]] — API reference and crate layout
 - [[provider-pattern]] — backend adapter pattern
-- [[lifecycle-state-machine]] — state transition validation
-- [[capability-discovery]] — runtime capability discovery
-- [[tool-registry]] — tools use sandbox for all I/O
-- [[vol-agent-server-crate]] — uses SandboxManager for orchestration
-- [[schema-drift]] — the failure mode that motivated deleting the second loader
-- [[sandbox-registry-manager-unification]] — the unification source page
-- [[sandbox-default-idempotency]] — `default()` idempotency and per-provider instance identity
+- [[capability-discovery]] — capability reporting
+- [[sandbox-default-idempotency]] — the `default()` fix and instance identity
+- [[sandbox-registry-manager-unification]] — how `SandboxManager` became the sole resolution path
+- [[schema-drift]] — why silent profile-loading failures are dangerous
+- [[vol-agent-server-crate]] — hosts the `sandbox.*` handler

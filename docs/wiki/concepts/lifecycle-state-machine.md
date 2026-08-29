@@ -3,177 +3,86 @@ type: concept
 category: pattern
 tags: [state-machine, lifecycle, validation, sandbox]
 created: 2026-08-27
-updated: 2026-08-27
-source_count: 1
+updated: 2026-08-28
+source_count: 2
 ---
 
 # Lifecycle State Machine
 
-## Overview
-The Lifecycle State Machine is a pattern for managing sandbox instance lifecycle with explicit states and validated transitions. The `SandboxManager` enforces state transition rules, preventing undefined behavior and ensuring consistent lifecycle management.
+The transition-validation mechanism inside `SandboxManager`. Full lifecycle treatment, including which parts are actually reachable, is in [[sandbox-lifecycle]].
 
-## State Diagram
+> **Corrected 2026-08-28.** This page previously presented the declared state machine — `Creating → Created → Running`, `pause`/`resume`, capability-gated operations — as the operative behavior. Probing showed otherwise: only `Running` and `Stopped` are ever assigned, `pause`/`resume` have no `SandboxManager` method, and `destroy()` performs no validation at all.
 
-```
-    ┌──────────┐
-    │ Creating │
-    └────┬─────┘
-         │
-         ▼
-    ┌──────────┐
-    │ Created  │
-    └────┬─────┘
-         │ start
-         ▼
-    ┌──────────┐    pause    ┌────────┐
-    │ Running  │────────────►│ Paused │
-    └────┬─────┘             └────┬───┘
-         │                        │
-         │ stop                   │ resume
-         │                        │
-         ▼                        │
-    ┌──────────┐                  │
-    │ Stopping │◄─────────────────┘
-    └────┬─────┘
-         │
-         ▼
-    ┌──────────┐
-    │ Stopped  │
-    └────┬─────┘
-         │ destroy
-         ▼
-    ┌───────────┐
-    │ Destroying│
-    └────┬──────┘
-         │
-         ▼
-    ┌───────────┐
-    │ Destroyed │
-    └───────────┘
+## The mechanism
 
-    Any state ──► Failed (on error)
+`validate_transition(from, to) -> SandboxResult<()>` is a `matches!` over allowed `(from, to)` pairs, returning `SandboxError::InvalidTransition { from, to }` on anything else.
+
+```text
+(Created,    Starting)  | (Created,  Running)
+(Starting,   Running)
+(Running,    Pausing)   | (Running,  Stopping)  | (Running, Stopped)
+(Pausing,    Paused)
+(Paused,     Starting)  | (Paused,   Running)
+(Paused,     Stopping)  | (Paused,   Stopped)
+(Stopping,   Stopped)
+(Stopped,    Starting)  | (Stopped,  Running)
+(Stopped,    Destroying)| (Stopped,  Destroyed)
+(Destroying, Destroyed)
+(_,          Failed)
 ```
 
-## Valid Transitions
+## What the manager actually asks it
 
-| From | To | Operation |
-|------|-----|-----------|
-| Creating | Created | System |
-| Created | Starting | System |
-| Starting | Running | System |
-| Running | Pausing | pause() |
-| Pausing | Paused | System |
-| Paused | Starting | resume() |
-| Running | Stopping | stop() |
-| Paused | Stopping | stop() |
-| Stopping | Stopped | System |
-| Stopped | Destroying | destroy() |
-| Destroying | Destroyed | System |
-| Any | Failed | Error |
+Only two call sites exist, and each passes a fixed `to`:
 
-## Implementation
+| Call site | `to` | Therefore succeeds from |
+|---|---|---|
+| `start(id)` | `Running` | `Created`, `Starting`, `Paused`, `Stopped` |
+| `stop(id)` | `Stopped` | `Running`, `Paused`, `Stopping` |
 
-### State Validation
-```rust
-fn validate_transition(from: SandboxStatus, to: SandboxStatus) -> SandboxResult<()> {
-    let valid = matches!(
-        (from, to),
-        (SandboxStatus::Created, SandboxStatus::Starting)
-            | (SandboxStatus::Starting, SandboxStatus::Running)
-            | (SandboxStatus::Running, SandboxStatus::Pausing)
-            | (SandboxStatus::Running, SandboxStatus::Stopping)
-            | (SandboxStatus::Running, SandboxStatus::Stopped)
-            | (SandboxStatus::Pausing, SandboxStatus::Paused)
-            | (SandboxStatus::Paused, SandboxStatus::Starting)
-            | (SandboxStatus::Paused, SandboxStatus::Running)
-            | (SandboxStatus::Paused, SandboxStatus::Stopping)
-            | (SandboxStatus::Paused, SandboxStatus::Stopped)
-            | (SandboxStatus::Stopping, SandboxStatus::Stopped)
-            | (SandboxStatus::Stopped, SandboxStatus::Starting)
-            | (SandboxStatus::Stopped, SandboxStatus::Running)
-            | (SandboxStatus::Stopped, SandboxStatus::Destroying)
-            | (SandboxStatus::Stopped, SandboxStatus::Destroyed)
-            | (SandboxStatus::Destroying, SandboxStatus::Destroyed)
-            | (_, SandboxStatus::Failed)
-    );
-    
-    if valid {
-        Ok(())
-    } else {
-        Err(SandboxError::InvalidTransition { from, to })
-    }
-}
+`destroy(id)` does **not** call it. No other operation does either.
+
+Because `create()` writes records directly at `Running`, and nothing ever assigns `Created` / `Starting` / `Pausing` / `Paused` / `Stopping` / `Destroying` / `Destroyed` / `Creating` / `Failed`, the reachable subset collapses to `Running ⇄ Stopped`:
+
+| Call | From | Result |
+|---|---|---|
+| `start()` | `Running` | `InvalidTransition: Running -> Running` |
+| `start()` | `Stopped` | ok |
+| `stop()` | `Running` | ok |
+| `stop()` | `Stopped` | `InvalidTransition: Stopped -> Stopped` |
+| `destroy()` | anything | ok, unvalidated |
+
+So the practical effect of the validator is narrow but real: it makes `start()` and `stop()` idempotency errors rather than silent no-ops.
+
+## Ordering
+
+Validation happens *before* the provider call, and the status update *after* it:
+
+```text
+load record
+validate_transition(record.status, target)?   // reject early
+provider.stop(backend_id).await?              // may fail
+store.update_status(id, target).await?        // only on success
 ```
 
-### Usage in Manager
-```rust
-pub async fn stop(&self, id: &SandboxId) -> SandboxResult<()> {
-    let record = self.store.get(id).await?;
-    
-    // Validate state transition
-    Self::validate_transition(record.status, SandboxStatus::Stopped)?;
-    
-    // Delegate to provider
-    let provider = self.get_provider(&record.provider_kind)?;
-    provider.stop(&record.backend_id).await?;
-    
-    // Update state
-    self.store.update_status(id, SandboxStatus::Stopped).await?;
-    Ok(())
-}
-```
+A failing provider call therefore leaves the recorded status unchanged — no phantom `Stopped` for a sandbox that refused to stop.
 
-## Benefits
+## Caveat: status is not authority
 
-### Safety
-Invalid transitions are rejected at runtime, preventing undefined behavior.
+For `local` and `ssh`, `stop()` is a no-op at the provider level and `get()` keeps returning a working handle afterwards. A `Stopped` record does not mean execution is prevented. Status is bookkeeping; see [[sandbox-lifecycle]].
 
-### Clarity
-Explicit states make the lifecycle model clear and documentable.
+## Error handling
 
-### Debugging
-State transitions can be logged and audited for troubleshooting.
-
-### Flexibility
-New states and transitions can be added without breaking existing code.
-
-## Error Handling
-
-Invalid transitions return `SandboxError::InvalidTransition`:
-```rust
+```text
 match manager.stop(&id).await {
-    Ok(()) => println!("Stopped successfully"),
-    Err(SandboxError::InvalidTransition { from, to }) => {
-        eprintln!("Cannot transition from {:?} to {:?}", from, to);
-    }
-    Err(e) => eprintln!("Error: {}", e),
-}
-```
-
-## Testing
-
-State machine is thoroughly tested:
-```rust
-#[tokio::test]
-async fn test_invalid_state_transitions() {
-    let manager = SandboxManager::new();
-    // ... setup ...
-    
-    let id = manager.create("test").await.unwrap();
-    
-    // Try invalid transition (Running → Running)
-    let result = manager.start(&id).await;
-    assert!(result.is_err());
-    
-    // Valid transition (Running → Stopped)
-    manager.stop(&id).await.unwrap();
-    
-    // Valid transition (Stopped → Running)
-    manager.start(&id).await.unwrap();
+    Ok(()) => ...,
+    Err(SandboxError::InvalidTransition { from, to }) => ...,  // already stopped
+    Err(e) => ...,
 }
 ```
 
 ## Related Concepts
-- [[sandbox-lifecycle]] — overall lifecycle management
+- [[sandbox-lifecycle]] — the full lifecycle, declared vs. reachable
+- [[sandbox-architecture]] — layers and resolution paths
 - [[provider-pattern]] — backend adapter pattern
-- [[vol-llm-sandbox-crate]] — implementation details
+- [[vol-llm-sandbox-crate]] — API reference
