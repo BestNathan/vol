@@ -10,7 +10,7 @@ source_count: 12
 # vol-llm-runtime Crate
 
 ## Overview
-`vol-llm-runtime` provides `AgentRuntime`, the authoritative owner of shared agent resources: LLM providers, tool registry, task store, MCP manager, sandbox registry, skills, agent definitions, and agent status tracking.
+`vol-llm-runtime` provides `AgentRuntime`, the authoritative owner of shared agent resources: LLM providers, tool registry, task store, MCP manager, sandbox manager, skills, agent definitions, and agent status tracking.
 
 ## Key Facts
 - `AgentRuntimeBuilder::build()` is the primary assembly point for runtime resources.

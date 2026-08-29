@@ -4,7 +4,7 @@ category: service
 tags: [sandbox, container, ssh, firecracker, tmp, wasm, rust, lifecycle, manager, provider]
 created: 2026-06-17
 updated: 2026-08-28
-source_count: 6
+source_count: 7
 ---
 
 # vol-llm-sandbox Crate
@@ -81,6 +81,9 @@ Profile-oriented (by name) — added 2026-08-28, absorbed from `SandboxRegistry`
 - `preload(dir)` — `load_profiles()` then eagerly instantiate every profile; per-profile failures warn+skip
 - `build_inline(spec)` — one-off sandbox from a spec, not cached or tracked (cli-tool inline `[sandbox]`)
 - `default_tmp()` — fresh `TmpSandbox`, falling back to `LocalSandbox`
+- `default()` — the implicit scratch sandbox, keyed on the reserved `DEFAULT_TMP_PROFILE` (`"default-tmp"`) profile. Idempotent and mutex-serialized: at most one such instance exists regardless of other store contents, and an unrelated instance is never returned. Source: [[sandbox-default-idempotency]].
+
+**Which providers have instance identity?** `backend_id` is a pure function of the spec for `local` (work dir path) and `ssh` (`user@host`) — two instances from one spec are interchangeable, so there is nothing to record. `tmp` (random `/tmp/<x>`) and `firecracker` (VM id) carry real per-instance state. This is why `sandbox.list` is legitimately empty when every configured profile is local or ssh; `sandbox.list_specs` is the right call for "what is configured".
 
 Setup:
 - `load_profiles(dir)` — loads `.agents/sandboxes/*.toml` as `SandboxSpec`
@@ -180,4 +183,5 @@ Changes from the pre-2026-08-27 format:
 - **2026-08-19**: LocalSandbox timeout kill reworked — positive-pid kills only
 - **2026-08-25**: SandboxHandler refactored to accept `Arc<SandboxRegistry>` for listing all sandboxes
 - **2026-08-27**: **Major refactor** — explicit lifecycle management with SandboxManager, SandboxProvider, SandboxStore, SandboxId, SandboxStatus, SandboxCapabilities. All implementations updated. 98%+ test coverage achieved.
+- **2026-08-28**: `SandboxManager::default()` made idempotent — it previously branched on the *total* store record count, so with >=2 records it created and registered a new tmp sandbox on every call (unbounded leak via the handler's six ops), and with exactly 1 record it returned that unrelated instance. Now keyed on the reserved `DEFAULT_TMP_PROFILE` and serialized by `default_lock`. See [[sandbox-default-idempotency]].
 - **2026-08-28**: **`SandboxRegistry` deleted** — `SandboxManager` is now the sole resolution path. `spec.rs` became the single schema source: SSH gained `host_key` / `known_hosts_file` / `passphrase` / timeout fields, `Firecracker` / `Wasm` variants added, all variants carry `work_dir`. `SSHSandboxProvider` dropped its `configs: Vec<SshConfig>` workaround and reads spec fields directly. Manager gained `acquire_by_name` / `preload` / `build_inline` / `default_tmp`. Fixes [[schema-drift]] that had `cli-tools-mcp` registering zero tools — see [[sandbox-registry-manager-unification]].

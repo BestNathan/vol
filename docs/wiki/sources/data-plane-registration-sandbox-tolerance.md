@@ -10,7 +10,9 @@ tags: [data-plane, registration, sandbox, fault-tolerance, websocket, heartbeat]
 
 **Authors/Creators:** Claude (Nathan)
 **Date:** 2026-06-17
-**Link:** `crates/vol-llm-sandbox/src/registry.rs`, `crates/vol-agent-server/src/app.rs`
+**Link:** `crates/vol-llm-sandbox/src/manager.rs` (was `src/registry.rs` at the time of writing), `crates/vol-agent-server/src/app.rs`
+
+> **Superseded (2026-08-28):** `SandboxRegistry` was deleted and `registry.rs` removed; the warn-and-skip tolerance described below now lives in `SandboxManager::load_profiles()` / `preload()`. The behavior carried over unchanged — including the failure mode where a total parse failure looks like a healthy start. See [[sandbox-registry-manager-unification]] and [[schema-drift]].
 
 ## TL;DR
 Two changes: (1) `SandboxRegistry::load()` now wraps per-sandbox errors in `tracing::warn!` + `continue` instead of propagating with `?`, so individual failing sandbox configs (bad TOML, missing known_hosts, etc.) no longer crash the server. (2) `app.rs` gained a `spawn_data_plane_connector()` function that connects a standalone data-plane to a remote control-plane via WebSocket, sends `control.register` + `capability_snapshot` on connect, maintains periodic heartbeats, and auto-reconnects with exponential backoff (1s to 60s) on disconnect.

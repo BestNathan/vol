@@ -215,6 +215,12 @@ Changes:
 
 Since 2026-08-28 `spec.rs` is the single schema source and `SandboxManager` the sole resolution path — the parallel `SandboxRegistry` loader was deleted after its stale schema caused [[schema-drift]]. `SandboxManager` gained profile-name lookup (`acquire_by_name` / `preload` / `build_inline` / `default_tmp`) alongside instance-ID lookup.
 
+### Which providers have instance identity?
+
+Recording an instance in the `SandboxStore` only makes sense when the instance carries state that the spec does not. `backend_id` is a pure function of the spec for `local` (the work dir path) and `ssh` (`user@host`) — build the same spec twice and you get two interchangeable objects, so there is no instance to track. `tmp` (a random `/tmp/<x>` path) and `firecracker` (a VM id) do carry per-instance state.
+
+Consequence: `sandbox.list` is legitimately empty when every configured profile is local or ssh. "What sandboxes are configured?" is answered by `sandbox.list_specs`, which reads the spec map. Manufacturing store records for local/ssh just to populate `list` would be inventing identity that does not exist — and would have tripped the `default()` leak described in [[sandbox-default-idempotency]].
+
 ## Related
 - [[vol-llm-sandbox-crate]] — implementation details
 - [[provider-pattern]] — backend adapter pattern
@@ -224,3 +230,4 @@ Since 2026-08-28 `spec.rs` is the single schema source and `SandboxManager` the 
 - [[vol-agent-server-crate]] — uses SandboxManager for orchestration
 - [[schema-drift]] — the failure mode that motivated deleting the second loader
 - [[sandbox-registry-manager-unification]] — the unification source page
+- [[sandbox-default-idempotency]] — `default()` idempotency and per-provider instance identity
