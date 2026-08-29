@@ -3,14 +3,16 @@ type: concept
 category: pattern
 tags: [provider, adapter, sandbox, backend-agnostic]
 created: 2026-08-27
-updated: 2026-08-27
+updated: 2026-08-28
 source_count: 1
 ---
 
 # Provider Pattern
 
 ## Overview
-The Provider pattern is a backend adapter pattern that separates backend-specific lifecycle management from orchestration logic. Each sandbox backend (Local, Tmp, SSH, Firecracker, Wasm) implements the `SandboxProvider` trait, allowing the `SandboxManager` to orchestrate instances without knowing backend-specific details.
+The Provider pattern is a backend adapter pattern that separates backend-specific lifecycle management from orchestration logic. A backend implements the `SandboxProvider` trait, allowing the `SandboxManager` to orchestrate instances without knowing backend-specific details.
+
+> **As of 2026-08-28 only three providers exist:** `local`, `tmp`, and `ssh`. `FirecrackerSandbox` and `WasmSandbox` implement the `Sandbox` trait but have **no `SandboxProvider` impl**, so they cannot be reached through `SandboxManager` — a `provider = "firecracker"` profile parses and then fails to instantiate with `UnknownType`. See [[sandbox-architecture]].
 
 ## How It Works
 
@@ -38,8 +40,8 @@ Each provider returns a unique `kind()` string:
 - `LocalSandboxProvider` → `"local"`
 - `TmpSandboxProvider` → `"tmp"`
 - `SSHSandboxProvider` → `"ssh"`
-- `FirecrackerSandboxProvider` → `"firecracker"`
-- `WasmSandboxProvider` → `"wasm"`
+
+(`"firecracker"` and `"wasm"` are valid config values but have no provider implementation.)
 
 ### Capability Declaration
 Providers declare their capabilities via `capabilities()`:
@@ -69,8 +71,8 @@ The `backend_id` is provider-specific:
 - Local: filesystem path
 - Tmp: temp directory path
 - SSH: `user@host` identifier
-- Firecracker: VM identifier
-- Wasm: module identifier
+
+Note the asymmetry: for `local` and `ssh` the `backend_id` is a pure function of the spec, so it conveys no per-instance information, while `tmp` generates a fresh path per create. This is what decides whether an instance is worth recording — see [[sandbox-lifecycle]].
 
 ### Instance Retrieval
 Providers retrieve existing instances by `backend_id`:
@@ -145,6 +147,7 @@ impl SandboxProvider for LocalSandboxProvider {
 ```
 
 ## Related Concepts
+- [[sandbox-architecture]] — the four layers and which providers are wired
 - [[sandbox-lifecycle]] — overall lifecycle management
 - [[capability-discovery]] — runtime capability discovery
 - [[vol-llm-sandbox-crate]] — implementation details

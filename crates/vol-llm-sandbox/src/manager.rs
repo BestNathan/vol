@@ -9,10 +9,15 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Reserved profile name for the manager's implicit scratch sandbox, created
+/// on demand by [`SandboxManager::default`]. Reserved because the manager
+/// treats a store record with this profile as *the* default instance.
+pub const DEFAULT_TMP_PROFILE: &str = "default-tmp";
+
 /// Unified orchestration service for sandbox lifecycle management.
 ///
-/// Replaces `SandboxRegistry`. Manages sandbox profiles (specs), routes to providers,
-/// and tracks instances via a `SandboxStore`.
+/// The sole sandbox resolution path: manages sandbox profiles (specs), routes
+/// to providers, and tracks instances via a `SandboxStore`.
 pub struct SandboxManager {
     providers: RwLock<HashMap<String, Arc<dyn SandboxProvider>>>,
     store: Arc<dyn SandboxStore>,
@@ -21,6 +26,8 @@ pub struct SandboxManager {
     instances: RwLock<HashMap<String, Arc<dyn Sandbox>>>,
     /// Maps profile name → backend_id for fast `acquire_by_name` lookup.
     name_to_backend: RwLock<HashMap<String, String>>,
+    /// Serializes `default()`'s check-then-create.
+    default_lock: tokio::sync::Mutex<()>,
 }
 
 impl SandboxManager {
@@ -31,6 +38,7 @@ impl SandboxManager {
             specs: RwLock::new(HashMap::new()),
             instances: RwLock::new(HashMap::new()),
             name_to_backend: RwLock::new(HashMap::new()),
+            default_lock: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -41,6 +49,7 @@ impl SandboxManager {
             specs: RwLock::new(HashMap::new()),
             instances: RwLock::new(HashMap::new()),
             name_to_backend: RwLock::new(HashMap::new()),
+            default_lock: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -83,9 +92,8 @@ impl SandboxManager {
 
     /// Look up a sandbox by profile name, creating it on first access.
     ///
-    /// This is the primary entry point for code that used to call
-    /// `SandboxRegistry::acquire(name)` — returns a cached instance if
-    /// one exists for the profile, otherwise creates one via the
+    /// The primary entry point for profile-name resolution: returns a cached
+    /// instance if one exists for the profile, otherwise creates one via the
     /// registered provider and caches it.
     pub async fn acquire_by_name(&self, name: &str) -> Option<SandboxRef> {
         // Fast path: already cached.
@@ -134,8 +142,13 @@ impl SandboxManager {
     }
 
     /// Load profiles from a directory and pre-create a sandbox instance
-    /// for each one. Individual failures are logged and skipped — matches
-    /// the old `SandboxRegistry::load()` behavior.
+    /// for each one.
+    ///
+    /// Individual failures are logged at `warn` and skipped, so a broken
+    /// profile does not prevent startup. Callers that need to know whether
+    /// every configured profile actually loaded must compare the profile
+    /// count against the registered count themselves — a total parse
+    /// failure otherwise looks like a healthy start with no sandboxes.
     pub async fn preload(&self, sandboxes_dir: &Path) -> SandboxResult<()> {
         self.load_profiles(sandboxes_dir).await?;
         let names: Vec<String> = self.specs.read().await.keys().cloned().collect();
@@ -168,7 +181,7 @@ impl SandboxManager {
 
     /// Fall back to a fresh TmpSandbox when no named sandbox is available.
     ///
-    /// Replacement for the old `SandboxRegistry::default()`.
+    /// Falls back further to a `LocalSandbox` if the tmp sandbox cannot be built.
     pub async fn default_tmp(&self) -> SandboxRef {
         match self
             .build_inline(&SandboxSpec {
@@ -381,20 +394,34 @@ impl SandboxManager {
         Ok(())
     }
 
-    /// Get the default sandbox.
-    /// If exactly one sandbox exists, return it.
-    /// Otherwise create a fresh TmpSandbox.
+    /// Get the default sandbox — an implicit, lazily-created scratch sandbox.
+    ///
+    /// Idempotent: the instance is keyed on the reserved
+    /// [`DEFAULT_TMP_PROFILE`] profile, so repeated calls return the same
+    /// sandbox and the store does not grow.
+    ///
+    /// An unrelated instance is never returned. Callers that need a specific
+    /// sandbox must resolve it by name via [`Self::acquire_by_name`] — this
+    /// method only ever yields the scratch sandbox.
     pub async fn default(&self) -> SandboxResult<SandboxRef> {
-        let records = self.store.list(None).await?;
-        if records.len() == 1 {
-            let first = records
-                .first()
-                .ok_or_else(|| SandboxError::NotFound("no sandbox instances found".to_string()))?;
-            return self.get(&first.id).await;
+        // Serialize the check-then-create so concurrent callers cannot each
+        // create their own "default" instance.
+        let _guard = self.default_lock.lock().await;
+
+        let existing = self
+            .store
+            .list(Some(SandboxFilter {
+                profile: Some(DEFAULT_TMP_PROFILE.to_string()),
+                provider_kind: None,
+                status: None,
+            }))
+            .await?;
+        if let Some(record) = existing.first() {
+            return self.get(&record.id).await;
         }
-        // Create a fresh TmpSandbox
+
         let spec = SandboxSpec {
-            name: "default-tmp".to_string(),
+            name: DEFAULT_TMP_PROFILE.to_string(),
             config: crate::SandboxProviderConfig::Tmp {
                 work_dir: None,
                 sub_dir: None,
@@ -407,29 +434,30 @@ impl SandboxManager {
             providers.get("tmp").cloned()
         };
 
-        if let Some(provider) = provider {
-            let backend_ref = provider.create(&spec).await?;
-            let id = SandboxId::new();
-            let record = SandboxRecord {
-                id: id.clone(),
-                profile: "default-tmp".to_string(),
-                provider_kind: "tmp".to_string(),
-                backend_id: backend_ref.backend_id.clone(),
-                status: SandboxStatus::Running,
-                created_at: Utc::now(),
-                updated_at: Utc::now(),
-                metadata: HashMap::new(),
-            };
-            self.store.insert(record).await?;
-            self.instances
-                .write()
-                .await
-                .insert(backend_ref.backend_id.clone(), backend_ref.sandbox.clone());
-            Ok(backend_ref.sandbox)
-        } else {
-            // Fallback: create a LocalSandbox directly
-            Ok(Arc::new(crate::local::LocalSandbox::new(None)))
-        }
+        let Some(provider) = provider else {
+            // No tmp provider registered. Fall back to a bare LocalSandbox,
+            // deliberately not recorded in the store: it is reconstructible
+            // from config alone and so has no instance identity to track.
+            return Ok(Arc::new(crate::local::LocalSandbox::new(None)));
+        };
+
+        let backend_ref = provider.create(&spec).await?;
+        let record = SandboxRecord {
+            id: SandboxId::new(),
+            profile: DEFAULT_TMP_PROFILE.to_string(),
+            provider_kind: "tmp".to_string(),
+            backend_id: backend_ref.backend_id.clone(),
+            status: SandboxStatus::Running,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            metadata: HashMap::new(),
+        };
+        self.store.insert(record).await?;
+        self.instances
+            .write()
+            .await
+            .insert(backend_ref.backend_id, backend_ref.sandbox.clone());
+        Ok(backend_ref.sandbox)
     }
 
     /// Register a pre-existing sandbox instance (backward compat).

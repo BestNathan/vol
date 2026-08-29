@@ -15,6 +15,8 @@ tags: [frontend, sandbox, ui, web, rpc, react]
 ## TL;DR
 Added a new "Sandboxes" tab to the React web frontend (between MCP and Logs) to display all registered sandboxes on the active data-plane node. Backend `SandboxHandler` was refactored to accept the full `SandboxRegistry` instead of a single sandbox instance, enabling `sandbox.list` to return all registered sandboxes.
 
+> **Superseded (2026-08-28):** `SandboxRegistry` was deleted; `SandboxHandler` now takes `Arc<SandboxManager>`. The frontend panel and the `sandbox.list` RPC are unchanged. See [[sandbox-registry-manager-unification]].
+
 ## Key Takeaways
 - `SandboxHandler` now holds `Arc<SandboxRegistry>` instead of `Arc<dyn Sandbox>`
 - `sandbox.list` iterates `registry.names()` and returns `Vec<SandboxInfo>` for all registered sandboxes

@@ -3,14 +3,16 @@ type: concept
 category: pattern
 tags: [capability, discovery, sandbox, backend-agnostic]
 created: 2026-08-27
-updated: 2026-08-27
+updated: 2026-08-28
 source_count: 1
 ---
 
 # Capability Discovery
 
 ## Overview
-Capability Discovery is a pattern for runtime discovery of backend capabilities. Each sandbox provider declares what operations it supports via `SandboxCapabilities`, allowing the orchestration layer and UI to expose correct lifecycle actions without hardcoding backend-specific knowledge.
+Capability Discovery is a pattern for runtime discovery of backend capabilities. Each sandbox provider declares what operations it supports via `SandboxCapabilities`, so the orchestration layer and UI can expose the right lifecycle actions without hardcoding backend-specific knowledge.
+
+> **Scope, as of 2026-08-28:** this describes the *intent*. In the current code the flags are **advisory only**. `SandboxManager` reads `capabilities()` in exactly one place — populating `SandboxInfo` for `list()` — and never to gate an operation: `stop()` and `destroy()` both proceed against providers declaring `stoppable: false` / `destroyable: false`. And because no lifecycle operation is exposed on the `sandbox.*` RPC surface, no UI can drive them regardless. Treat the flags as documentation of intent, not a guarantee. See [[sandbox-lifecycle]].
 
 ## How It Works
 
@@ -138,8 +140,8 @@ Orchestration and UI don't need to know backend-specific details. They query cap
 ### Extensibility
 New backends declare their capabilities; no changes needed in orchestration or UI.
 
-### Safety
-UI only exposes actions that the backend supports, preventing invalid operations.
+### Safety (intended, not yet realized)
+The goal is that a UI only offers actions the backend supports. Nothing enforces this today — see the scope note above.
 
 ### Flexibility
 Capabilities can be extended without breaking existing code.
@@ -216,6 +218,7 @@ fn test_tmp_provider_capabilities() {
 ```
 
 ## Related Concepts
-- [[sandbox-lifecycle]] — overall lifecycle management
+- [[sandbox-architecture]] — the four layers and provider matrix
+- [[sandbox-lifecycle]] — overall lifecycle management, and why these flags are advisory
 - [[provider-pattern]] — backend adapter pattern
 - [[vol-llm-sandbox-crate]] — implementation details

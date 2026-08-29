@@ -24,7 +24,7 @@ pub mod tmp;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
-pub use manager::SandboxManager;
+pub use manager::{SandboxManager, DEFAULT_TMP_PROFILE};
 pub use provider::{BackendSandboxRef, SandboxInfo, SandboxProvider};
 pub use spec::{
     FirecrackerConfig, LocalConfig, SandboxProviderConfig, SandboxSpec, SshConfig, TmpConfig,
