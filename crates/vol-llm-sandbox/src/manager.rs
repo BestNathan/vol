@@ -59,8 +59,19 @@ impl SandboxManager {
         self.providers.write().await.insert(kind, provider);
     }
 
-    /// Load sandbox profiles from a directory.
-    /// Reads *.toml files and parses them as SandboxSpec.
+    /// Load sandbox profiles from a directory, reading `*.toml` files and
+    /// parsing each as a [`SandboxSpec`].
+    ///
+    /// Registers specs only — **no sandbox is instantiated here**. Instances
+    /// are created on demand by [`Self::acquire_by_name`], so a profile nobody
+    /// references costs nothing beyond the parsed spec. A missing directory is
+    /// not an error.
+    ///
+    /// Per-file parse failures are logged at `warn` and skipped, so one broken
+    /// profile does not prevent startup. Callers that need to know whether
+    /// every configured profile actually loaded must compare the file count
+    /// against [`Self::list_specs`] themselves — otherwise a total parse
+    /// failure looks identical to a healthy start with no profiles on disk.
     pub async fn load_profiles(&self, sandboxes_dir: &Path) -> SandboxResult<()> {
         if !sandboxes_dir.exists() {
             return Ok(());
@@ -139,25 +150,6 @@ impl SandboxManager {
                 None
             }
         }
-    }
-
-    /// Load profiles from a directory and pre-create a sandbox instance
-    /// for each one.
-    ///
-    /// Individual failures are logged at `warn` and skipped, so a broken
-    /// profile does not prevent startup. Callers that need to know whether
-    /// every configured profile actually loaded must compare the profile
-    /// count against the registered count themselves — a total parse
-    /// failure otherwise looks like a healthy start with no sandboxes.
-    pub async fn preload(&self, sandboxes_dir: &Path) -> SandboxResult<()> {
-        self.load_profiles(sandboxes_dir).await?;
-        let names: Vec<String> = self.specs.read().await.keys().cloned().collect();
-        for name in names {
-            if self.acquire_by_name(&name).await.is_none() {
-                tracing::warn!(profile = %name, "preload: sandbox creation failed, skipped");
-            }
-        }
-        Ok(())
     }
 
     /// Build a one-off sandbox from a spec without caching.

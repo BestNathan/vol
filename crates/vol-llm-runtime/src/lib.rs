@@ -453,12 +453,12 @@ impl AgentRuntimeBuilder {
                     metadata: std::collections::HashMap::new(),
                 })
                 .await;
-            // Pre-create all sandboxes from disk config so cli-tool loading
-            // can acquire them by name.
+            // Register the on-disk profiles. Instances are created on demand
+            // by `acquire_by_name`, so profiles nobody references cost nothing.
             manager
-                .preload(&sandboxes_dir)
+                .load_profiles(&sandboxes_dir)
                 .await
-                .map_err(|e| format!("Sandbox manager preload failed: {e}"))?;
+                .map_err(|e| format!("Sandbox profile loading failed: {e}"))?;
             manager
         };
         let sandbox_manager = Arc::new(sandbox_manager);

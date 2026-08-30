@@ -81,9 +81,9 @@ connect_timeout_secs = 10
         .register_provider(Arc::new(vol_llm_sandbox::ssh::SSHSandboxProvider::new()))
         .await;
 
-    manager.preload(&sandbox_dir).await.unwrap();
+    manager.load_profiles(&sandbox_dir).await.unwrap();
 
-    // The sandbox was pre-created by preload — verify via acquire_by_name.
+    // Profiles are registered lazily; acquire_by_name creates on demand.
     let sandbox = manager.acquire_by_name("test-ssh").await.unwrap();
     assert_eq!(sandbox.kind(), "ssh");
 }

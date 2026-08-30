@@ -59,9 +59,9 @@ async fn main() -> anyhow::Result<()> {
         ))
         .await;
     manager
-        .preload(&cli.sandboxes_dir)
+        .load_profiles(&cli.sandboxes_dir)
         .await
-        .map_err(|e| anyhow::anyhow!("sandbox preload: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("sandbox profile loading: {e}"))?;
 
     let server = CliToolsMcpServer::load(&cli.cli_tools_dir, &manager)
         .await
