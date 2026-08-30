@@ -128,7 +128,11 @@ Returns the implicit scratch sandbox, keyed on the reserved `DEFAULT_TMP_PROFILE
 
 ## Durability
 
-`InMemorySandboxStore` is the only `SandboxStore` implementation, so **all instance records are lost on restart**. Profiles are re-read from disk and re-instantiated by `preload()`, so recovery is automatic for named profiles — but any `SandboxId` handed out before a restart becomes permanently unresolvable. A persistent store (SQLite/Postgres) is a natural extension; the trait boundary already exists for it.
+`InMemorySandboxStore` is the only `SandboxStore` implementation, so **all instance records are lost on restart**. Profiles are re-read from disk by `load_profiles()` and re-instantiated on first use, so recovery is automatic for named profiles — but any `SandboxId` handed out before a restart becomes permanently unresolvable. A persistent store (SQLite/Postgres) is a natural extension; the trait boundary already exists for it.
+
+### Dropping an instance releases it
+
+`SSHSandbox` spawns a background idle-timeout task in `new()`. Since 2026-08-30 a `Drop` impl aborts it: dropping a `JoinHandle` does not stop a tokio task, so previously the loop kept its own `Arc<SshSession>` clone alive for the rest of the process and an evicted or destroyed SSH sandbox never released its connection. `destroy()` evicting the handle from `instances` is therefore now sufficient to actually free the backend. See [[sandbox-ssh-idle-task-lifecycle]].
 
 ## Known gaps
 
@@ -137,7 +141,6 @@ Returns the implicit scratch sandbox, keyed on the reserved `DEFAULT_TMP_PROFILE
 - `destroy()` bypasses both transition validation and capability checks.
 - Capability flags are never enforced.
 - No lifecycle operation is exposed over the `sandbox.*` RPC surface, so none of this is drivable from the frontend.
-- `preload()` eagerly instantiates every profile at startup, which is unnecessary (`acquire_by_name()` already creates lazily) and for SSH is net-negative: `SSHSandbox::new()` spawns a 1-second-tick idle task that lives as long as the `Arc`, while `create()` never calls `start()`, so no connection is actually warmed.
 
 ## Related
 - [[sandbox-architecture]] — layers, providers, config schema, resolution paths

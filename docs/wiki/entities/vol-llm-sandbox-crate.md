@@ -95,7 +95,6 @@ The sole sandbox resolution path since 2026-08-28 (`SandboxRegistry` deleted).
 | Method | Records in store? | Purpose |
 |---|---|---|
 | `acquire_by_name(name)` | No | cache hit, else create via provider and cache. Returns `Option`. |
-| `preload(dir)` | No | `load_profiles()` then eagerly instantiate each; per-profile failures warn+skip |
 | `build_inline(spec)` | No | one-off, uncached — for cli-tool inline `[sandbox]` blocks |
 | `default_tmp()` | No | fresh `TmpSandbox`, falling back to `LocalSandbox` |
 | `default()` | Yes | the idempotent scratch sandbox keyed on `DEFAULT_TMP_PROFILE` |
@@ -161,17 +160,20 @@ let manager = SandboxManager::new();
 manager.register_provider(Arc::new(LocalSandboxProvider)).await;
 manager.register_provider(Arc::new(TmpSandboxProvider)).await;
 manager.register_provider(Arc::new(SSHSandboxProvider::new())).await;
-manager.preload(Path::new(".agents/sandboxes")).await?;
+manager.load_profiles(Path::new(".agents/sandboxes")).await?;
 ```
 
-Forgetting a `register_provider` is a silent failure: profiles of that kind parse fine, then fail to instantiate, and `preload()` warns and skips them.
+`load_profiles` registers specs only — nothing is instantiated until an `acquire_by_name()` asks for it.
+
+Forgetting a `register_provider` is a silent failure: profiles of that kind parse fine, then fail at first acquire, and `acquire_by_name()` warns and returns `None`.
 
 ### Runtime integration
 
-- `AgentRuntimeBuilder::build()` is the authoritative assembly point: registers `local`/`tmp`/`ssh`, registers a `"local"` profile pointing at `working_dir`, then `preload()`s.
+- `AgentRuntimeBuilder::build()` is the authoritative assembly point: registers `local`/`tmp`/`ssh`, registers a `"local"` profile pointing at `working_dir`, then `load_profiles()`.
 - `"local"` is an ordinary profile via `register_profile()`, not a special case — it resolves through the same path as disk-loaded profiles.
 - `DataPlaneServerCore` reuses `runtime.sandbox_manager` rather than constructing its own, so control-plane `sandbox.*` operations and data-plane tool execution observe the same instances.
-- `cli-tools-mcp` builds its own manager, registers the same three providers, and calls `preload()`.
+- `cli-tools-mcp` builds its own manager, registers the same three providers, and calls `load_profiles()`.
+- `cli_tool::load_dir()` calls `acquire_by_name()` per `sandbox_ref` to decide whether to register each tool, so referenced profiles are still built during startup — by the cli-tool loader, not by profile loading.
 
 ### How callers select a sandbox
 
@@ -183,12 +185,11 @@ Agents using `sandbox = "local"` land in `/app/` on DP nodes.
 
 ## Known gaps
 - `InMemorySandboxStore` is the only store — instance metadata does not survive restart, so any `SandboxId` becomes unresolvable after one.
-- No `SandboxProvider` for `firecracker` or `wasm`. Their spec variants parse, then `preload()` warns and skips for lack of a registered provider.
+- No `SandboxProvider` for `firecracker` or `wasm`. Their spec variants parse, then fail at first acquire with `UnknownType` for lack of a registered provider.
 - `SSHSandboxProvider::get(backend_id)` returns `NotFound` unconditionally — only the `instances` cache resolves SSH sandboxes after creation.
 - No `pause`/`resume` on `SandboxManager`, so `Pausing`/`Paused` are unreachable.
 - `SandboxCapabilities` is never enforced; `destroy()` skips both capability checks and transition validation.
 - No lifecycle operation is exposed on the `sandbox.*` RPC surface.
-- `preload()`'s eager instantiation is unnecessary and, for SSH, net-negative — see [[sandbox-lifecycle]].
 
 ## Timeline
 - **2026-06-17**: Initial sandbox abstraction, LocalSandbox, SSHSandbox, FirecrackerSandbox
@@ -198,4 +199,5 @@ Agents using `sandbox = "local"` land in `/app/` on DP nodes.
 - **2026-08-27**: **Major refactor** — explicit lifecycle management with SandboxManager, SandboxProvider, SandboxStore, SandboxId, SandboxStatus, SandboxCapabilities. All implementations updated.
 - **2026-08-28**: **`SandboxRegistry` deleted** — `SandboxManager` is now the sole resolution path. `spec.rs` became the single schema source: SSH gained `host_key` / `known_hosts_file` / `passphrase` / timeout fields, `Firecracker` / `Wasm` variants added, all variants carry `work_dir`. `SSHSandboxProvider` dropped its `configs: Vec<SshConfig>` workaround and reads spec fields directly. Manager gained `acquire_by_name` / `preload` / `build_inline` / `default_tmp`. Fixes [[schema-drift]] that had `cli-tools-mcp` registering zero tools — see [[sandbox-registry-manager-unification]].
 - **2026-08-28**: `SandboxManager::default()` made idempotent — it previously branched on the *total* store record count, so with >=2 records it created and registered a new tmp sandbox on every call (unbounded leak via the handler's six ops), and with exactly 1 record it returned that unrelated instance. Now keyed on the reserved `DEFAULT_TMP_PROFILE` and serialized by `default_lock`. See [[sandbox-default-idempotency]].
+- **2026-08-30**: `SSHSandbox` gained a `Drop` impl that aborts its idle task. Dropping a `JoinHandle` does not stop a tokio task, so the idle loop previously outlived the sandbox holding its own `Arc<SshSession>` — an evicted or destroyed SSH sandbox never released its connection. The loop also now sleeps to the deadline instead of polling every second (~2 wakeups per 300s window instead of 300). `preload()` was deleted: it eagerly instantiated every profile, which `acquire_by_name()` already does lazily; callers use `load_profiles()`. See [[sandbox-ssh-idle-task-lifecycle]].
 - **2026-08-28**: Documentation audit — [[sandbox-architecture]] created as the entry point; [[sandbox-lifecycle]] rewritten around declared-vs-reachable behavior after probing found only `Running`/`Stopped` are ever assigned, no `pause`/`resume` exists on the manager, `destroy()` skips validation, and capabilities are never enforced.

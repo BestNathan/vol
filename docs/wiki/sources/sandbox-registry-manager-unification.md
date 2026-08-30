@@ -75,6 +75,8 @@ A `name_to_backend: RwLock<HashMap<String, String>>` index maps profile name →
 
 `preload()` is safe to run at startup even for SSH profiles because `SshSession::new()` only stores config — the TCP connection is established lazily on first use.
 
+> **Superseded (2026-08-30):** `preload()` was deleted; callers use `load_profiles()`, which instantiates nothing. The claim above was also incomplete: while `SshSession::new()` does not connect, `SSHSandbox::new()` *does* spawn a per-instance background idle task, and that task was never aborted — so eagerly instantiating SSH profiles leaked a task plus an `Arc<SshSession>` per profile. See [[sandbox-ssh-idle-task-lifecycle]].
+
 ### Call-site migration
 
 - `CliToolConfig.sandbox` — `Option<SandboxConfig>` → `Option<SandboxSpec>`
