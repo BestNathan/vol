@@ -16,7 +16,37 @@ on:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
+      # vol-mcp-servers plus its workspace dependency closure. A change to any
+      # of these crates changes the built binaries, so the images must rebuild.
+      # Previously this listed only crates/vol-mcp-servers/**, which meant a fix
+      # in a dependency (e.g. vol-llm-sandbox, which cli-tools-mcp calls for
+      # preload/acquire_by_name) shipped to vol-agent-server but silently not to
+      # the MCP images.
+      #
+      # Regenerate with:
+      #   cargo metadata --format-version 1 | python3 -c 'import json,sys,os; \
+      #     m=json.load(sys.stdin); r=m["workspace_root"]; \
+      #     p={x["id"]:x for x in m["packages"]}; \
+      #     n={x["id"]:x for x in m["resolve"]["nodes"]}; \
+      #     t=[i for i,x in p.items() if x["name"]=="vol-mcp-servers"][0]; s=set(); \
+      #     w=lambda i: i in s or (s.add(i), [w(d["pkg"]) for d in n[i]["deps"]]); w(t); \
+      #     print("\n".join(sorted("      - \"%s/**\"" % os.path.relpath(os.path.dirname(p[i]["manifest_path"]), r) \
+      #       for i in s if p[i]["manifest_path"].startswith(r+"/crates/"))))'
+      - "crates/md-frontmatter/**"
+      - "crates/vol-llm-agent/**"
+      - "crates/vol-llm-cli-tool/**"
+      - "crates/vol-llm-context/**"
+      - "crates/vol-llm-core/**"
+      - "crates/vol-llm-mcp/**"
+      - "crates/vol-llm-memory/**"
+      - "crates/vol-llm-observability/**"
+      - "crates/vol-llm-provider/**"
+      - "crates/vol-llm-sandbox/**"
+      - "crates/vol-llm-skill/**"
+      - "crates/vol-llm-tool/**"
+      - "crates/vol-llm-tracing/**"
       - "crates/vol-mcp-servers/**"
+      - "crates/vol-session/**"
       - "dockers/vol-mcp-servers.Dockerfile"
       - ".cargo/config.toml"
       - "rust-toolchain.toml"
