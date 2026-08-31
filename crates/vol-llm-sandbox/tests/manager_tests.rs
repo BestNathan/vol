@@ -1059,60 +1059,153 @@ async fn acquire_by_name_provider_failure_returns_none() {
     );
 }
 
-#[tokio::test]
-async fn preload_loads_and_instantiates_every_profile() {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("a.toml"),
-        "name = \"a\"\nprovider = \"local\"\n",
-    )
-    .unwrap();
-    std::fs::write(
-        dir.path().join("b.toml"),
-        "name = \"b\"\nprovider = \"local\"\n",
-    )
-    .unwrap();
+/// Counts `create()` calls so laziness can be asserted directly rather than
+/// inferred from side effects.
+struct CountingProvider {
+    creates: Arc<std::sync::atomic::AtomicUsize>,
+}
 
+#[async_trait]
+impl SandboxProvider for CountingProvider {
+    fn kind(&self) -> &str {
+        "local"
+    }
+
+    fn capabilities(&self) -> SandboxCapabilities {
+        SandboxCapabilities {
+            persistent: true,
+            pausable: false,
+            stoppable: false,
+            destroyable: false,
+        }
+    }
+
+    async fn create(&self, _spec: &SandboxSpec) -> SandboxResult<BackendSandboxRef> {
+        self.creates
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let sandbox = Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None));
+        Ok(BackendSandboxRef {
+            backend_id: format!("counting-{}", sandbox.id()),
+            sandbox,
+        })
+    }
+
+    async fn get(&self, _backend_id: &str) -> SandboxResult<Arc<dyn Sandbox>> {
+        Ok(Arc::new(vol_llm_sandbox::local::LocalSandbox::new(None)))
+    }
+
+    async fn list(&self) -> SandboxResult<Vec<vol_llm_sandbox::SandboxInfo>> {
+        Ok(vec![])
+    }
+
+    async fn start(&self, _b: &str) -> SandboxResult<()> {
+        Ok(())
+    }
+    async fn pause(&self, _b: &str) -> SandboxResult<()> {
+        Ok(())
+    }
+    async fn resume(&self, _b: &str) -> SandboxResult<()> {
+        Ok(())
+    }
+    async fn stop(&self, _b: &str) -> SandboxResult<()> {
+        Ok(())
+    }
+    async fn destroy(&self, _b: &str) -> SandboxResult<()> {
+        Ok(())
+    }
+}
+
+fn write_profiles(dir: &std::path::Path, names: &[&str]) {
+    for n in names {
+        std::fs::write(
+            dir.join(format!("{n}.toml")),
+            format!("name = \"{n}\"\nprovider = \"local\"\n"),
+        )
+        .unwrap();
+    }
+}
+
+/// `load_profiles` registers specs without instantiating anything. This
+/// replaced `preload()`, which eagerly created every profile — wasteful for
+/// profiles nobody references, and for SSH it also spawned a background idle
+/// task per profile.
+#[tokio::test]
+async fn load_profiles_registers_specs_without_instantiating() {
+    let dir = tempfile::tempdir().unwrap();
+    write_profiles(dir.path(), &["a", "b"]);
+
+    let creates = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let manager = SandboxManager::new();
     manager
-        .register_provider(Arc::new(MockProvider::new("local")))
+        .register_provider(Arc::new(CountingProvider {
+            creates: Arc::clone(&creates),
+        }))
         .await;
 
-    manager.preload(dir.path()).await.unwrap();
+    manager.load_profiles(dir.path()).await.unwrap();
 
-    // Both profiles are known and already instantiated.
-    assert_eq!(manager.list_specs().await.len(), 2);
-    assert!(manager.acquire_by_name("a").await.is_some());
-    assert!(manager.acquire_by_name("b").await.is_some());
+    assert_eq!(manager.list_specs().await.len(), 2, "both specs registered");
+    assert_eq!(
+        creates.load(std::sync::atomic::Ordering::SeqCst),
+        0,
+        "load_profiles must not instantiate any sandbox"
+    );
 }
 
 #[tokio::test]
-async fn preload_skips_profiles_whose_creation_fails() {
+async fn acquire_by_name_instantiates_on_demand_exactly_once() {
     let dir = tempfile::tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("a.toml"),
-        "name = \"a\"\nprovider = \"local\"\n",
-    )
-    .unwrap();
+    write_profiles(dir.path(), &["a", "b"]);
+
+    let creates = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let manager = SandboxManager::new();
+    manager
+        .register_provider(Arc::new(CountingProvider {
+            creates: Arc::clone(&creates),
+        }))
+        .await;
+    manager.load_profiles(dir.path()).await.unwrap();
+
+    assert!(manager.acquire_by_name("a").await.is_some());
+    assert_eq!(
+        creates.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "only the requested profile is created"
+    );
+
+    // Second acquire is a cache hit, and "b" is still untouched.
+    assert!(manager.acquire_by_name("a").await.is_some());
+    assert_eq!(
+        creates.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "repeat acquire must hit the cache"
+    );
+}
+
+#[tokio::test]
+async fn load_profiles_succeeds_even_when_a_provider_would_fail() {
+    let dir = tempfile::tempdir().unwrap();
+    write_profiles(dir.path(), &["a"]);
 
     let manager = SandboxManager::new();
     manager.register_provider(Arc::new(FailingProvider)).await;
 
-    // preload itself succeeds — per-profile failures warn and skip.
-    manager.preload(dir.path()).await.unwrap();
+    // Loading no longer touches the provider, so a backend that cannot create
+    // does not affect startup at all. The failure surfaces at acquire time.
+    manager.load_profiles(dir.path()).await.unwrap();
     assert_eq!(manager.list_specs().await.len(), 1);
     assert!(manager.acquire_by_name("a").await.is_none());
 }
 
 #[tokio::test]
-async fn preload_missing_dir_is_ok() {
+async fn load_profiles_missing_dir_is_ok() {
     let manager = SandboxManager::new();
     manager
         .register_provider(Arc::new(MockProvider::new("local")))
         .await;
 
     manager
-        .preload(std::path::Path::new("/nonexistent/sandboxes/xyz"))
+        .load_profiles(std::path::Path::new("/nonexistent/sandboxes/xyz"))
         .await
         .unwrap();
     assert_eq!(manager.list_specs().await.len(), 0);

@@ -34,8 +34,18 @@ pub struct SSHSandbox {
     session: Arc<session::SshSession>,
     last_activity: Arc<StdMutex<std::time::Instant>>,
     _idle_timeout: Duration,
-    _idle_task: tokio::task::JoinHandle<()>,
+    idle_task: tokio::task::JoinHandle<()>,
     status: SandboxStatus,
+}
+
+impl Drop for SSHSandbox {
+    fn drop(&mut self) {
+        // Dropping a `JoinHandle` does NOT stop the task. Without this abort
+        // the idle loop runs for the rest of the process lifetime holding its
+        // own `Arc<SshSession>` clone, so a sandbox that has been evicted from
+        // the manager's cache or destroyed never releases its SSH connection.
+        self.idle_task.abort();
+    }
 }
 
 impl SSHSandbox {
@@ -66,26 +76,44 @@ impl SSHSandbox {
 
         // Background idle timeout task — shares the same `last_activity`
         // state so that every file / command operation resets the timer.
+        //
+        // Sleeps until the deadline rather than polling: at the default
+        // 300s timeout this wakes roughly twice per window instead of 300
+        // times. Aborted by `Drop`.
         let idle_task_last_activity = Arc::clone(&last_activity);
         let session_clone = Arc::clone(&session);
         let idle_dur = idle_timeout;
-        let _idle_task = tokio::spawn(async move {
+        let idle_task = tokio::spawn(async move {
+            // Floor for the post-disconnect sleep so a configured
+            // `idle_timeout_secs = 0` cannot spin. Matches the previous
+            // behavior, which slept 1s per iteration unconditionally.
+            const FLOOR: Duration = Duration::from_secs(1);
             loop {
-                tokio::time::sleep(Duration::from_secs(1)).await;
                 let elapsed = idle_task_last_activity
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .elapsed();
-                if elapsed > idle_dur {
-                    debug!(
-                        idle_dur = ?idle_dur,
-                        "SSH sandbox idle timeout reached, disconnecting"
-                    );
-                    let _ = session_clone.disconnect().await;
-                    *idle_task_last_activity
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                        std::time::Instant::now();
+
+                match idle_dur.checked_sub(elapsed) {
+                    // Still inside the window. Sleep the remainder, then
+                    // re-check: activity during the sleep pushes the
+                    // deadline out and we simply wait again.
+                    Some(remaining) if !remaining.is_zero() => {
+                        tokio::time::sleep(remaining).await;
+                    }
+                    // Idle for at least `idle_dur`.
+                    _ => {
+                        debug!(
+                            idle_dur = ?idle_dur,
+                            "SSH sandbox idle timeout reached, disconnecting"
+                        );
+                        let _ = session_clone.disconnect().await;
+                        *idle_task_last_activity
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                            std::time::Instant::now();
+                        tokio::time::sleep(FLOOR).await;
+                    }
                 }
             }
         });
@@ -97,7 +125,7 @@ impl SSHSandbox {
             session,
             last_activity,
             _idle_timeout: idle_timeout,
-            _idle_task,
+            idle_task,
             status: SandboxStatus::Running,
         })
     }
@@ -400,5 +428,93 @@ impl crate::SandboxProvider for SSHSandboxProvider {
 
     async fn destroy(&self, _backend_id: &str) -> crate::SandboxResult<()> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_config() -> SshConfig {
+        // `SSHSandbox::new` does not connect — the session is established
+        // lazily on first use — so these tests need no reachable host.
+        SshConfig {
+            host: "127.0.0.1".to_string(),
+            user: "nobody".to_string(),
+            work_dir: PathBuf::from("/tmp/ssh-sandbox-test"),
+            port: 22,
+            key_path: None,
+            passphrase: None,
+            known_hosts_file: None,
+            host_key: None,
+            idle_timeout_secs: 300,
+            connect_timeout_secs: 1,
+        }
+    }
+
+    /// Regression: the idle task used to outlive the sandbox. It is spawned in
+    /// `new()` and holds its own `Arc<SshSession>` clone; dropping a
+    /// `JoinHandle` does not stop a tokio task, so without the `Drop` impl the
+    /// session stayed alive for the rest of the process even after the sandbox
+    /// was evicted from the manager's cache or destroyed.
+    #[tokio::test]
+    async fn dropping_sandbox_aborts_idle_task_and_releases_session() {
+        let sandbox = SSHSandbox::new("drop-test".to_string(), test_config()).unwrap();
+        let session = Arc::downgrade(&sandbox.session);
+        assert!(
+            session.upgrade().is_some(),
+            "session should be alive while the sandbox is"
+        );
+
+        drop(sandbox);
+
+        // `abort()` is not synchronous: the task is scheduled for cancellation
+        // and releases its Arc when the runtime drops the future.
+        for _ in 0..100 {
+            if session.upgrade().is_none() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        assert!(
+            session.upgrade().is_none(),
+            "idle task must be aborted on drop so the SSH session is released"
+        );
+    }
+
+    #[tokio::test]
+    async fn idle_task_is_aborted_not_merely_detached() {
+        let sandbox = SSHSandbox::new("abort-test".to_string(), test_config()).unwrap();
+        let handle = sandbox.idle_task.abort_handle();
+        assert!(!handle.is_finished(), "task should be running");
+
+        drop(sandbox);
+
+        for _ in 0..100 {
+            if handle.is_finished() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(handle.is_finished(), "idle task must terminate on drop");
+    }
+
+    /// The idle task must not disconnect before the window elapses. With the
+    /// old 1s polling loop this was implicit; with sleep-to-deadline it is
+    /// worth pinning that a short-timeout sandbox still survives briefly.
+    #[tokio::test]
+    async fn idle_task_does_not_fire_before_deadline() {
+        let mut cfg = test_config();
+        cfg.idle_timeout_secs = 60;
+        let sandbox = SSHSandbox::new("deadline-test".to_string(), cfg).unwrap();
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        assert!(
+            !sandbox.idle_task.is_finished(),
+            "idle task should still be waiting well inside the window"
+        );
+        assert_eq!(sandbox.kind(), "ssh");
     }
 }

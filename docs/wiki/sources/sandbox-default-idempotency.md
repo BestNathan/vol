@@ -79,9 +79,9 @@ The no-tmp-provider fallback still returns a bare `LocalSandbox` but deliberatel
 - `just check` / `fmt-check` / `clippy-strict` / `no-doc-tests` / `boundaries` / `no-clippy-allow` all pass
 
 ## Notes / Open Questions
-- **`preload()` residency is still unaddressed.** Eagerly instantiating every profile at startup is unnecessary (`acquire_by_name()` already creates lazily) and for SSH is net-negative: `SSHSandbox::new()` spawns a 1-second-tick background idle task that lives as long as the `Arc`, while `create()` never calls `start()` so no connection is actually warmed. Two SSH profiles means two permanent tickers per process whether or not the sandboxes are ever used.
+- **`preload()` residency — resolved 2026-08-30.** `preload()` was deleted and the SSH idle task now aborts on drop. Investigating it also turned up something worse than the waste noted here: the task was never aborted at all, so it outlived its sandbox holding an `Arc<SshSession>`. See [[sandbox-ssh-idle-task-lifecycle]].
 - **`default_tmp()` reuses the string `"default-tmp"`** for its spec name but goes through `build_inline()`, which never records anything — so there is no collision with the now-reserved profile today. The name overlap is still a readability trap.
-- The warn-and-skip in `preload()` / `load_dir()` that hid [[schema-drift]] remains in place.
+- The warn-and-skip that hid [[schema-drift]] remains in place, now in `load_profiles()` / `load_dir()`.
 
 ## Entities Mentioned
 - [[vol-llm-sandbox-crate]]: `default()` rewritten; `DEFAULT_TMP_PROFILE` const added and re-exported; `default_lock` field added

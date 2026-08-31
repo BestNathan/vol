@@ -121,12 +121,13 @@ Five entry points. Only some are used in production:
 
 | Entry point | Records in `store`? | Caches handle? | Production callers |
 |---|---|---|---|
-| `acquire_by_name(name)` | **No** | Yes | ReAct tool loop, cli-tool loader, `preload()` |
-| `preload(dir)` | No | Yes | `AgentRuntimeBuilder`, `cli-tools-mcp` startup |
+| `acquire_by_name(name)` | **No** | Yes | ReAct tool loop, cli-tool loader |
 | `build_inline(spec)` | No | No | cli-tool inline `[sandbox]` blocks |
 | `default()` | Yes | Yes | `SandboxHandler` — all six `sandbox.*` I/O ops |
 | `default_tmp()` | No | No | ReAct fallback when a named lookup misses |
 | `create(profile)` | Yes | Yes | **none** — tests only |
+
+`load_profiles(dir)` is not in this table because it resolves nothing: it registers specs and instantiates none. Instances appear on first `acquire_by_name()`, so a profile no cli-tool or agent references is never built.
 
 Because every real resolution path goes through `acquire_by_name()`, which does not write a store record, `sandbox.list` is empty in production while `sandbox.list_specs` returns every configured profile. That is correct behavior, not a defect — see [[sandbox-lifecycle]].
 
@@ -136,7 +137,9 @@ Because every real resolution path goes through `acquire_by_name()`, which does 
 
 1. register the `local`, `tmp`, `ssh` providers
 2. register a `"local"` profile pointing at `working_dir`, so `sandbox = "local"` reaches project files
-3. `preload(.agents/sandboxes/)` — parse every `*.toml` into a spec, then eagerly instantiate each
+3. `load_profiles(.agents/sandboxes/)` — parse every `*.toml` into a spec, instantiating nothing
+
+Note that `cli_tool::load_dir()` then calls `acquire_by_name()` for every `sandbox_ref` it encounters, in order to decide whether to register that tool. So referenced profiles *are* built during startup — just by the cli-tool loader rather than by profile loading. Only unreferenced profiles stay uninstantiated.
 
 `DataPlaneServerCore` reuses `runtime.sandbox_manager` rather than building its own, so control-plane `sandbox.*` calls and data-plane tool execution share instances.
 

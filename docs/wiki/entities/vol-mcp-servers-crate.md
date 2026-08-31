@@ -37,7 +37,7 @@ Exposes each `.agents/cli-tools/*.toml` config as one MCP tool taking a single `
 
 CLI flags: `--cli-tools-dir` (default `.agents/cli-tools`), `--sandboxes-dir` (default `.agents/sandboxes`), plus the shared transport args.
 
-Startup builds a [[sandbox-lifecycle]] `SandboxManager`, registers Local/Tmp/SSH providers, calls `preload(sandboxes_dir)`, then hands the manager to `CliToolsMcpServer::load()`, which resolves each tool's `sandbox_ref` via `acquire_by_name()`.
+Startup builds a [[sandbox-lifecycle]] `SandboxManager`, registers Local/Tmp/SSH providers, calls `load_profiles(sandboxes_dir)`, then hands the manager to `CliToolsMcpServer::load()`, which resolves each tool's `sandbox_ref` via `acquire_by_name()`.
 
 Deployed as its own workload (`deploy/argocd/manifests/workloads/mcp/cli-tools-mcp/`) with cli-tool and sandbox ConfigMaps projected in, and the `ansible-ssh-key` Secret mounted at `/app/.ssh`. Runs as root — required for SSH key access.
 
