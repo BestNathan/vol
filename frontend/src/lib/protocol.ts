@@ -160,7 +160,7 @@ export interface RpcMethods {
   'sandbox.list': { params: object; result: { sandboxes: SandboxInfo[] } }
   'sandbox.list_specs': { params: object; result: { specs: SandboxSpecInfo[] } }
   'task.list': { params: { status?: string; assignee?: string }; result: { tasks: TaskEntry[] } }
-  'task.get': { params: { task_id: number }; result: { task: TaskEntry | null } }
+  'task.get': { params: { task_id: string }; result: { task: TaskEntry | null } }
   'log.list': { params: object; result: { runs: LogRunSummary[] } }
   'log.read': { params: { run_id: string }; result: { entries: LogLine[] } }
   'system.connected': { params: object; result: ConnectedInfo }

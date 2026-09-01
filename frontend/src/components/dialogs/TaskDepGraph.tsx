@@ -15,7 +15,7 @@ import type { TaskEntry } from '@/types'
  *  referenced (as a dependency/block) but is not present in the loaded task
  *  list — e.g. a cross-agent task filtered out by the agent sub-tab. */
 export interface GraphNode {
-  id: number
+  id: string
   layer: number
   order: number
   known: boolean
@@ -24,8 +24,8 @@ export interface GraphNode {
 /** A directed edge in dependency direction: `from` is the dependency, `to` is
  *  the dependent task it unblocks. */
 export interface GraphEdge {
-  from: number
-  to: number
+  from: string
+  to: string
 }
 
 export interface GraphLayout {
@@ -34,17 +34,17 @@ export interface GraphLayout {
 }
 
 /** Build the layered layout for the dependency graph centered on `center`. */
-export function build_graph_layout(tasks: TaskEntry[], center: number): GraphLayout {
-  const index = new Map<number, TaskEntry>(tasks.map((t) => [t.id, t]))
+export function build_graph_layout(tasks: TaskEntry[], center: string): GraphLayout {
+  const index = new Map<string, TaskEntry>(tasks.map((t) => [t.id, t]))
 
   // Phase 1: discover the node set and classify each node's direction
   // relative to the center: -1 = upstream (reached via `dependencies`),
   // +1 = downstream (reached via `blocks`), 0 = center. A shared `visited`
   // set makes discovery cycle-safe.
-  const dir_of = new Map<number, number>()
-  const known_of = new Map<number, boolean>()
-  const visited = new Set<number>()
-  const discovery: number[] = []
+  const dir_of = new Map<string, number>()
+  const known_of = new Map<string, boolean>()
+  const visited = new Set<string>()
+  const discovery: string[] = []
 
   visited.add(center)
   dir_of.set(center, 0)
@@ -52,7 +52,7 @@ export function build_graph_layout(tasks: TaskEntry[], center: number): GraphLay
   discovery.push(center)
 
   // Upstream discovery via `dependencies`.
-  const up: number[] = [center]
+  const up: string[] = [center]
   while (up.length > 0) {
     const cur = up.shift()!
     const task = index.get(cur)
@@ -69,7 +69,7 @@ export function build_graph_layout(tasks: TaskEntry[], center: number): GraphLay
   }
 
   // Downstream discovery via `blocks`.
-  const down: number[] = [center]
+  const down: string[] = [center]
   while (down.length > 0) {
     const cur = down.shift()!
     const task = index.get(cur)
@@ -90,7 +90,7 @@ export function build_graph_layout(tasks: TaskEntry[], center: number): GraphLay
   // points one or more layers downward. Relaxation is order-independent at the
   // fixpoint; it is capped at the node count so it terminates even if the
   // (normally acyclic) graph happens to contain a cycle.
-  const layer_of = new Map<number, number>()
+  const layer_of = new Map<string, number>()
   for (const id of discovery) {
     layer_of.set(id, dir_of.get(id)!)
   }
@@ -168,15 +168,15 @@ export const PAD = 30
 
 interface TaskDepGraphProps {
   tasks: TaskEntry[]
-  centerId: number
+  centerId: string
   onClose: () => void
 }
 
 /** Modal showing the dependency graph centered on `centerId`. */
 export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
-  const [selected, setSelected] = useState<number | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
 
-  const index = useMemo(() => new Map<number, TaskEntry>(tasks.map((t) => [t.id, t])), [tasks])
+  const index = useMemo(() => new Map<string, TaskEntry>(tasks.map((t) => [t.id, t])), [tasks])
   const layout = useMemo(() => build_graph_layout(tasks, centerId), [tasks, centerId])
 
   const minLayer = Math.min(...layout.nodes.map((n) => n.layer), 0)
@@ -194,7 +194,7 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
     PAD + order * COL,
     PAD + (layer - minLayer) * ROW,
   ]
-  const centerXy = new Map<number, [number, number]>(
+  const centerXy = new Map<string, [number, number]>(
     layout.nodes.map((n) => {
       const [x, y] = pos(n.layer, n.order)
       return [n.id, [x + NODE_W / 2, y + NODE_H / 2]]
@@ -217,7 +217,7 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
         <DialogHeader>
           <DialogTitle>
             <span className="text-[15px] font-semibold text-foreground">
-              Dependency Graph — t{centerId}
+              Dependency Graph — {centerId}
             </span>
           </DialogTitle>
         </DialogHeader>
@@ -265,7 +265,7 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
                 const stroke = isCenter ? '#ffd040' : '#555577'
                 const strokeWidth = isCenter ? '3' : '1'
                 const dash = n.known ? '0' : '4'
-                const label = isCenter ? `★ t${n.id}` : `t${n.id}`
+                const label = isCenter ? `★ ${n.id}` : `${n.id}`
                 return (
                   <g key={n.id} style={{ cursor: 'pointer' }} onClick={() => setSelected(n.id)}>
                     <rect
@@ -297,7 +297,7 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
               {selectedTask ? (
                 <>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-primary">t{selectedTask.id}</span>
+                    <span className="font-mono text-primary">{selectedTask.id}</span>
                     <span
                       className="px-1 rounded text-[10px] font-bold"
                       style={{ background: statusColor(selectedTask.status), color: '#10101a' }}
@@ -317,7 +317,7 @@ export function TaskDepGraph({ tasks, centerId, onClose }: TaskDepGraphProps) {
                 </>
               ) : (
                 <div className="text-muted-foreground">
-                  t{selected} — task not loaded (outside current filter)
+                  {selected} — task not loaded (outside current filter)
                 </div>
               )}
             </div>
