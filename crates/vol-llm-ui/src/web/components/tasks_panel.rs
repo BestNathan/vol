@@ -41,7 +41,7 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
     let app: crate::web::components::app::AppState = use_context();
     // Local UI state (not cached) — filter/selection persist only within session.
     let task_state = use_signal(|| TaskState::new());
-    let graph_target = use_signal(|| None::<u64>);
+    let graph_target = use_signal(|| None::<String>);
 
     let cache = app.node_data_cache;
     let initial_assignee = assignee_filter.clone();
@@ -194,7 +194,7 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
             .map(|s| (s.tasks, s.loading, s.error))
             .unwrap_or_default()
     };
-    let selected_task_id = task_state.read().selected_task;
+    let selected_task_id = task_state.read().selected_task.clone();
     let status_filter = task_state.read().status_filter.clone();
 
     // Early return if no node selected.
@@ -330,16 +330,16 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
                 }
                 for task in &filtered {
                     {
-                        let is_selected = selected_task_id == Some(task.id);
+                        let is_selected = selected_task_id.as_deref() == Some(task.id.as_str());
                         let row_cls = if is_selected {
                             "border-b border-[#333355] p-2 cursor-pointer bg-[#1a2a44]"
                         } else {
                             "border-b border-[#333355] p-2 cursor-pointer hover:bg-[#222240]"
                         };
                         let color = status_color(&task.status);
-                        let task_id = task.id;
-                        let task_id2 = task.id;
-                        let task_id3 = task.id;
+                        let task_id = task.id.clone();
+                        let task_id2 = task.id.clone();
+                        let task_id3 = task.id.clone();
                         let mut graph_open = graph_target;
                         rsx! {
                             div {
@@ -349,12 +349,12 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
                                     let mut s = task_state;
                                     move |_| {
                                         s.with_mut(|t| {
-                                            t.selected_task = if t.selected_task == Some(task_id2) { None } else { Some(task_id2) };
+                                            t.selected_task = if t.selected_task.as_deref() == Some(task_id2.as_str()) { None } else { Some(task_id2.clone()) };
                                         });
                                     }
                                 },
                                 div { class: "flex items-center gap-2",
-                                    span { class: "text-[11px] text-[#555] font-mono whitespace-nowrap", "t{task_id}" }
+                                    span { class: "text-[11px] text-[#555] font-mono whitespace-nowrap", "{task_id}" }
                                     span {
                                         class: "text-[10px] px-1 rounded font-bold whitespace-nowrap",
                                         style: "background: {color}; color: #1a1a2e;",
@@ -370,7 +370,7 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
                                             title: "View dependency graph",
                                             onclick: move |evt| {
                                                 evt.stop_propagation();
-                                                graph_open.set(Some(task_id3));
+                                                graph_open.set(Some(task_id3.clone()));
                                             },
                                             "⇄ deps"
                                         }
@@ -386,7 +386,7 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
                                             div { class: "text-[#888]",
                                                 "Dependencies: "
                                                 for (i, dep) in task.dependencies.iter().enumerate() {
-                                                    span { "t{dep}" }
+                                                    span { "{dep}" }
                                                     if i < task.dependencies.len() - 1 { span { ", " } }
                                                 }
                                             }
@@ -395,7 +395,7 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
                                             div { class: "text-[#888]",
                                                 "Blocks: "
                                                 for (i, blk) in task.blocks.iter().enumerate() {
-                                                    span { "t{blk}" }
+                                                    span { "{blk}" }
                                                     if i < task.blocks.len() - 1 { span { ", " } }
                                                 }
                                             }
@@ -410,10 +410,10 @@ pub fn TasksPanel(assignee_filter: Option<String>) -> Element {
             {
                 // Always mounted so the graph overlay can play its exit
                 // animation; `open` drives visibility through AnimatedOverlay.
-                // When no task is targeted the overlay is hidden, so a
-                // placeholder center (0) is harmless.
+                // When no task is targeted the overlay is hidden, so an empty
+                // placeholder center is harmless.
                 let graph_open = graph_target().is_some();
-                let graph_center = graph_target().unwrap_or(0);
+                let graph_center = graph_target().unwrap_or_default();
                 let mut graph_close = graph_target;
                 rsx! {
                     TaskDepGraph {

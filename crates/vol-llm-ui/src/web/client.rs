@@ -177,9 +177,13 @@ pub struct AgentListEntry {
     pub ws_url: Option<String>,
 }
 
+/// Task row returned by `task.list` / `task.get`.
+///
+/// `id`, `dependencies` and `blocks` are decimal-digit strings on the wire
+/// ("1", never 1 and never "t1") — `TaskId` serializes as a string.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TaskEntry {
-    pub id: u64,
+    pub id: String,
     pub status: String,
     pub kind: String,
     pub publisher: Option<String>,
@@ -187,8 +191,8 @@ pub struct TaskEntry {
     pub subject: String,
     pub description: String,
     pub active_form: Option<String>,
-    pub dependencies: Vec<u64>,
-    pub blocks: Vec<u64>,
+    pub dependencies: Vec<String>,
+    pub blocks: Vec<String>,
     pub created_at: u64,
     pub started_at: Option<u64>,
     pub completed_at: Option<u64>,
@@ -1794,7 +1798,7 @@ impl JsonRpcClient {
         self.inner.pending.borrow_mut().insert(id, cb);
     }
 
-    pub fn task_get(&self, task_id: u64, cb: impl FnOnce(Result<TaskEntry, String>) + 'static) {
+    pub fn task_get(&self, task_id: String, cb: impl FnOnce(Result<TaskEntry, String>) + 'static) {
         let id = self.alloc_id();
         let msg = serde_json::json!({
             "jsonrpc": "2.0",
