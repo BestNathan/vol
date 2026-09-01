@@ -854,7 +854,7 @@ impl Payload {
             Operation::Task(TaskOperation::Get) => {
                 #[derive(Deserialize)]
                 struct P {
-                    task_id: u64,
+                    task_id: vol_llm_task::TaskId,
                 }
                 let p: P = serde_json::from_value(value)
                     .map_err(|_| ProtocolError::PayloadDecodeFailed("task.get"))?;
@@ -1340,7 +1340,7 @@ pub enum TaskPayload {
         tasks: Vec<serde_json::Value>,
     },
     Get {
-        task_id: u64,
+        task_id: vol_llm_task::TaskId,
     },
     GetResult {
         task: serde_json::Value,
@@ -2049,7 +2049,52 @@ mod tests {
     fn payload_from_operation_task_get() {
         let op = Operation::Task(TaskOperation::Get);
         let p = Payload::from_operation(&op, serde_json::json!({"task_id": 42})).unwrap();
-        assert_eq!(p, Payload::Task(TaskPayload::Get { task_id: 42 }));
+        assert_eq!(
+            p,
+            Payload::Task(TaskPayload::Get {
+                task_id: vol_llm_task::TaskId(42)
+            })
+        );
+    }
+
+    #[test]
+    fn test_task_get_decodes_string_and_legacy_number() {
+        let from_string = Payload::from_operation(
+            &Operation::Task(TaskOperation::Get),
+            serde_json::json!({ "task_id": "7" }),
+        )
+        .expect("string id decodes");
+        assert!(matches!(
+            from_string,
+            Payload::Task(TaskPayload::Get { task_id }) if task_id == vol_llm_task::TaskId(7)
+        ));
+
+        let from_number = Payload::from_operation(
+            &Operation::Task(TaskOperation::Get),
+            serde_json::json!({ "task_id": 7 }),
+        )
+        .expect("legacy numeric id decodes");
+        assert!(matches!(
+            from_number,
+            Payload::Task(TaskPayload::Get { task_id }) if task_id == vol_llm_task::TaskId(7)
+        ));
+    }
+
+    #[test]
+    fn test_task_get_rejects_malformed_id() {
+        assert!(Payload::from_operation(
+            &Operation::Task(TaskOperation::Get),
+            serde_json::json!({ "task_id": "abc" }),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_task_get_payload_serializes_id_as_string() {
+        let payload = Payload::Task(TaskPayload::Get {
+            task_id: vol_llm_task::TaskId(7),
+        });
+        assert_eq!(payload.data_json()["task_id"], serde_json::json!("7"));
     }
 
     #[test]
