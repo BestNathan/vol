@@ -232,7 +232,7 @@ mod tests {
         let store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new());
         let tool = TaskClaim::new(store.clone());
         let ctx = make_context("coding");
-        let args = serde_json::json!({"taskId": "t999"});
+        let args = serde_json::json!({"taskId": "999"});
         let result = tool.execute(&args, &ctx).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));

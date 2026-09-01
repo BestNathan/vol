@@ -117,12 +117,12 @@ mod tests {
     #[test]
     fn test_fmt_task_detail() {
         let output = fmt_task_detail(&sample_task());
-        assert!(output.contains("Task t42"));
+        assert!(output.contains("Task 42"));
         assert!(output.contains("fix login bug"));
         assert!(output.contains("Pending"));
         assert!(output.contains("coding-agent"));
-        assert!(output.contains("t1, t2"));
-        assert!(output.contains("t50"));
+        assert!(output.contains("1, 2"));
+        assert!(output.contains("50"));
         assert!(output.contains("handle OAuth callback"));
     }
 
@@ -136,14 +136,14 @@ mod tests {
         let tasks = vec![sample_task()];
         let output = fmt_task_list(&tasks);
         assert!(output.contains("1 task(s)"));
-        assert!(output.contains("t42"));
+        assert!(output.contains("42"));
         assert!(output.contains("fix login bug"));
     }
 
     #[test]
     fn test_fmt_create_confirm() {
         let output = fmt_create_confirm(&sample_task());
-        assert!(output.contains("Task t42 created"));
+        assert!(output.contains("Task 42 created"));
         assert!(output.contains("fix login bug"));
     }
 
