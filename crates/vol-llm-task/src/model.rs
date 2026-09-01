@@ -278,4 +278,28 @@ mod tests {
         assert!(TaskId::from_str("").is_err());
         assert!(TaskId::from_str("t").is_err());
     }
+
+    #[test]
+    fn test_task_id_rejects_wrong_json_type() {
+        // Exercises the visitor's `expecting` message on non-string,
+        // non-integer input.
+        let err = serde_json::from_str::<TaskId>("true")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("a task id as a decimal string or an unsigned integer"),
+            "unexpected message: {err}"
+        );
+        assert!(serde_json::from_str::<TaskId>("null").is_err());
+        assert!(serde_json::from_str::<TaskId>("{}").is_err());
+    }
+
+    #[test]
+    fn test_parse_task_id_error_is_a_std_error_with_the_offending_input() {
+        use std::str::FromStr;
+        let err = TaskId::from_str("ttt1").unwrap_err();
+        assert_eq!(err.to_string(), "invalid task id: \"ttt1\"");
+        let as_std_error: &dyn std::error::Error = &err;
+        assert_eq!(as_std_error.to_string(), "invalid task id: \"ttt1\"");
+    }
 }

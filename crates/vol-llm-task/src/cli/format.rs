@@ -117,12 +117,15 @@ mod tests {
     #[test]
     fn test_fmt_task_detail() {
         let output = fmt_task_detail(&sample_task());
-        assert!(output.contains("Task 42"));
+        assert!(output.contains("Task 42: \"fix login bug\""));
         assert!(output.contains("fix login bug"));
         assert!(output.contains("Pending"));
         assert!(output.contains("coding-agent"));
-        assert!(output.contains("1, 2"));
-        assert!(output.contains("50"));
+        // Anchor on the field labels: the block also embeds a Debug-printed
+        // SystemTime, whose ~19 digits would otherwise match a bare "1, 2" or
+        // "50" and let the test pass with the field missing entirely.
+        assert!(output.contains("Dependencies: 1, 2"));
+        assert!(output.contains("Blocks:       50"));
         assert!(output.contains("handle OAuth callback"));
     }
 
@@ -136,7 +139,9 @@ mod tests {
         let tasks = vec![sample_task()];
         let output = fmt_task_list(&tasks);
         assert!(output.contains("1 task(s)"));
-        assert!(output.contains("42"));
+        // Anchored on the two-space id column so a stray "42" elsewhere in the
+        // row cannot satisfy it.
+        assert!(output.contains("  42  "));
         assert!(output.contains("fix login bug"));
     }
 
