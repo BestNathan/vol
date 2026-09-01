@@ -92,11 +92,12 @@ Three constraints, each a real failure mode:
    `agent_id` against path traversal, quarantining bad values under
    `agents_root/.invalid-agent-id/<hex>/sessions`. A second, naive path builder
    would reopen that hole.
-2. **`list_sessions` must not treat sidecars as sessions.** The directory scan
-   at `file_store.rs:200-264` produces one `SessionSummary` per file it
-   recognizes. Verify it filters on `.jsonl`; if it does not, `x.meta.json`
-   will appear as a phantom session named `x.meta`. This is the single most
-   likely bug in this change.
+2. **`list_sessions` must keep ignoring sidecars.** The directory scan at
+   `file_store.rs:200-264` produces one `SessionSummary` per file it
+   recognizes. Verified during planning: `file_store.rs:225-227` already
+   filters on the `jsonl` extension, so a `.meta.json` sidecar is skipped and
+   the phantom-session bug does not exist. Keep a regression test so it stays
+   that way.
 3. **`delete_session` must remove the sidecar.** Otherwise metadata resurrects
    onto a later session that reuses the id.
 
