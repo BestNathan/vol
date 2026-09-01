@@ -184,6 +184,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_file_store_reads_legacy_numeric_ids() {
+        // Bodies written before the representation change hold bare integers
+        // for `id`, `dependencies`, and `blocks`. They must still load.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileTaskStore::new(dir.path().to_path_buf())
+            .await
+            .expect("store");
+
+        let tasks_dir = dir.path().join("tasks");
+        std::fs::create_dir_all(&tasks_dir).expect("tasks dir");
+        std::fs::write(
+            tasks_dir.join("7.json"),
+            r#"{
+                "id": 7,
+                "status": "Pending",
+                "kind": "Agent",
+                "publisher": null,
+                "assignee": null,
+                "subject": "legacy",
+                "description": "",
+                "active_form": null,
+                "dependencies": [1, 2],
+                "blocks": [],
+                "result": null,
+                "summary": null,
+                "output_file": null,
+                "created_at": { "secs_since_epoch": 0, "nanos_since_epoch": 0 },
+                "started_at": null,
+                "completed_at": null
+            }"#,
+        )
+        .expect("write legacy task");
+
+        let loaded = store
+            .get(&TaskId(7))
+            .await
+            .expect("get succeeds")
+            .expect("task present");
+        assert_eq!(loaded.id, TaskId(7));
+        assert_eq!(loaded.dependencies, vec![TaskId(1), TaskId(2)]);
+    }
+
+    #[tokio::test]
     async fn test_create_and_get() {
         let (store, _dir) = temp_store().await;
         let task = Task::new(TaskKind::Agent, "file task".to_string(), vec![]);
