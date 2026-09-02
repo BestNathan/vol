@@ -387,6 +387,25 @@ impl SessionEntryStore for DatabaseSessionEntryStore {
         let count: usize = count as usize;
         Ok(count)
     }
+
+    async fn get_session_metadata(
+        &self,
+        _session_id: &str,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        Err(StoreError::Internal(
+            "session metadata not yet implemented for the database backend".to_string(),
+        ))
+    }
+
+    async fn merge_session_metadata(
+        &self,
+        _session_id: &str,
+        _patch: serde_json::Map<String, serde_json::Value>,
+    ) -> Result<()> {
+        Err(StoreError::Internal(
+            "session metadata not yet implemented for the database backend".to_string(),
+        ))
+    }
 }
 
 #[async_trait]
@@ -503,6 +522,19 @@ mod tests {
         let url = format!("sqlite://{}", temp.path().join("sessions.db").display());
         let manager = DatabaseSessionManager::connect(&url).await.unwrap();
         (temp, manager)
+    }
+
+    #[tokio::test]
+    async fn test_metadata_not_yet_implemented() {
+        // Replaced with real behaviour in a later task. This test exists so
+        // an unimplemented backend fails loudly rather than silently.
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("alpha");
+        assert!(store.get_session_metadata("s1").await.is_err());
+        assert!(store
+            .merge_session_metadata("s1", serde_json::Map::new())
+            .await
+            .is_err());
     }
 
     #[tokio::test]

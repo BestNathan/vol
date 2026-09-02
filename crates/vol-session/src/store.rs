@@ -74,6 +74,26 @@ pub trait SessionEntryStore: Send + Sync {
 
     /// Get entry count for a session.
     async fn get_count(&self, session_id: &str) -> Result<usize>;
+
+    /// Read session-level metadata.
+    ///
+    /// Returns an empty map for a session that does not exist — absence of
+    /// metadata is not an error.
+    async fn get_session_metadata(
+        &self,
+        session_id: &str,
+    ) -> Result<serde_json::Map<String, serde_json::Value>>;
+
+    /// Shallow-merge a patch into session-level metadata.
+    ///
+    /// Keys in `patch` replace existing keys wholesale; keys absent from
+    /// `patch` are left alone. Creates the session record if it does not yet
+    /// exist — a binding can be written before the first entry.
+    async fn merge_session_metadata(
+        &self,
+        session_id: &str,
+        patch: serde_json::Map<String, serde_json::Value>,
+    ) -> Result<()>;
 }
 
 /// Legacy MessageStore trait — kept for backward compatibility.

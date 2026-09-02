@@ -369,6 +369,25 @@ impl SessionEntryStore for FileSessionEntryStore {
         }
         Ok(count)
     }
+
+    async fn get_session_metadata(
+        &self,
+        _session_id: &str,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        Err(StoreError::Internal(
+            "session metadata not yet implemented for the file backend".to_string(),
+        ))
+    }
+
+    async fn merge_session_metadata(
+        &self,
+        _session_id: &str,
+        _patch: serde_json::Map<String, serde_json::Value>,
+    ) -> Result<()> {
+        Err(StoreError::Internal(
+            "session metadata not yet implemented for the file backend".to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -666,5 +685,24 @@ mod entry_tests {
 
         let entries = store.get_entries("test-session").await.unwrap();
         assert_eq!(entries.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_metadata_not_yet_implemented() {
+        // Replaced with real behaviour in a later task. This test exists so
+        // an unimplemented backend fails loudly rather than silently.
+        let temp_dir = tempdir().unwrap();
+        let store = FileSessionEntryStore::new(temp_dir.path());
+        assert!(store.get_session_metadata("s1").await.is_err());
+        assert!(store
+            .merge_session_metadata("s1", serde_json::Map::new())
+            .await
+            .is_err());
     }
 }
