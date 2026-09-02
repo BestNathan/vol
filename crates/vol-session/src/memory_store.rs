@@ -176,6 +176,8 @@ impl MessageStore for InMemoryMessageStore {
 /// In-memory entry store for testing.
 pub struct InMemoryEntryStore {
     entries: tokio::sync::RwLock<HashMap<String, Vec<crate::entry::SessionEntry>>>,
+    session_metadata:
+        tokio::sync::RwLock<HashMap<String, serde_json::Map<String, serde_json::Value>>>,
 }
 
 impl Default for InMemoryEntryStore {
@@ -189,6 +191,7 @@ impl InMemoryEntryStore {
     pub fn new() -> Self {
         Self {
             entries: tokio::sync::RwLock::new(HashMap::new()),
+            session_metadata: tokio::sync::RwLock::new(HashMap::new()),
         }
     }
 }
@@ -245,12 +248,56 @@ impl crate::store::SessionEntryStore for InMemoryEntryStore {
 
     async fn delete_session(&self, session_id: &str) -> crate::store::Result<()> {
         self.entries.write().await.remove(session_id);
+        // Drop metadata too, or it resurrects onto a later session that reuses
+        // this id — and the map would otherwise grow without bound.
+        self.session_metadata.write().await.remove(session_id);
         Ok(())
     }
 
     async fn get_count(&self, session_id: &str) -> crate::store::Result<usize> {
         let entries = self.entries.read().await;
         Ok(entries.get(session_id).map(std::vec::Vec::len).unwrap_or(0))
+    }
+
+    async fn get_session_metadata(
+        &self,
+        session_id: &str,
+    ) -> crate::store::Result<serde_json::Map<String, serde_json::Value>> {
+        let metadata = self.session_metadata.read().await;
+        Ok(metadata.get(session_id).cloned().unwrap_or_default())
+    }
+
+    async fn merge_session_metadata(
+        &self,
+        session_id: &str,
+        patch: serde_json::Map<String, serde_json::Value>,
+    ) -> crate::store::Result<()> {
+        let mut metadata = self.session_metadata.write().await;
+        let entry = metadata.entry(session_id.to_string()).or_default();
+        for (k, v) in patch {
+            entry.insert(k, v);
+        }
+        Ok(())
+    }
+
+    async fn append_session_metadata_values(
+        &self,
+        session_id: &str,
+        key: &str,
+        values: &[String],
+    ) -> crate::store::Result<()> {
+        if values.is_empty() {
+            return Ok(());
+        }
+
+        // One write lock held across read, union, and write — that is the whole
+        // atomicity guarantee. Splitting this into `get_session_metadata` plus
+        // `merge_session_metadata` would release the lock between the two and
+        // let a concurrent append be overwritten.
+        let mut metadata = self.session_metadata.write().await;
+        let entry = metadata.entry(session_id.to_string()).or_default();
+        crate::store::union_metadata_values(entry, key, values)?;
+        Ok(())
     }
 }
 
@@ -368,6 +415,262 @@ mod entry_tests {
         // Deleting A should not affect B
         store.delete_session("session-a").await.unwrap();
         assert_eq!(store.get_count("session-b").await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_metadata_round_trip() {
+        let store = InMemoryEntryStore::new();
+        let mut patch = serde_json::Map::new();
+        patch.insert("task_ids".into(), serde_json::json!(["1", "2"]));
+
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("merge succeeds");
+
+        let meta = store.get_session_metadata("s1").await.expect("get");
+        assert_eq!(meta["task_ids"], serde_json::json!(["1", "2"]));
+    }
+
+    #[tokio::test]
+    async fn test_metadata_unknown_session_is_empty_not_error() {
+        let store = InMemoryEntryStore::new();
+        let meta = store.get_session_metadata("nope").await.expect("get");
+        assert!(meta.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_metadata_merge_is_shallow_and_preserves_other_keys() {
+        let store = InMemoryEntryStore::new();
+
+        let mut first = serde_json::Map::new();
+        first.insert("a".into(), serde_json::json!(1));
+        store
+            .merge_session_metadata("s1", first)
+            .await
+            .expect("first");
+
+        let mut second = serde_json::Map::new();
+        second.insert("b".into(), serde_json::json!(2));
+        store
+            .merge_session_metadata("s1", second)
+            .await
+            .expect("second");
+
+        let meta = store.get_session_metadata("s1").await.expect("get");
+        assert_eq!(meta["a"], serde_json::json!(1));
+        assert_eq!(meta["b"], serde_json::json!(2));
+    }
+
+    #[tokio::test]
+    async fn test_metadata_survives_a_later_first_entry_save() {
+        // A binding can be written before the session's first message. Saving
+        // that first entry must not clobber metadata already recorded.
+        let store = InMemoryEntryStore::new();
+        let mut patch = serde_json::Map::new();
+        patch.insert("k".into(), serde_json::json!("v"));
+
+        store
+            .merge_session_metadata("brand-new", patch)
+            .await
+            .expect("merge");
+
+        store
+            .save(SessionEntry::from_message(SessionMessage::new(
+                "brand-new".to_string(),
+                Message::user("first message, written after the binding"),
+            )))
+            .await
+            .expect("save");
+
+        assert_eq!(store.get_count("brand-new").await.expect("count"), 1);
+        assert_eq!(
+            store.get_session_metadata("brand-new").await.expect("get")["k"],
+            serde_json::json!("v")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_session_also_clears_metadata() {
+        let store = InMemoryEntryStore::new();
+        let mut patch = serde_json::Map::new();
+        patch.insert("task_ids".into(), serde_json::json!(["1"]));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("merge");
+        store
+            .save(SessionEntry::from_message(SessionMessage::new(
+                "s1".to_string(),
+                Message::user("hello"),
+            )))
+            .await
+            .expect("save");
+
+        store.delete_session("s1").await.expect("delete");
+
+        // A reused session id must not resurrect the old binding.
+        assert!(store
+            .get_session_metadata("s1")
+            .await
+            .expect("get")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_delete_session_leaves_other_sessions_metadata_alone() {
+        let store = InMemoryEntryStore::new();
+        let mut a = serde_json::Map::new();
+        a.insert("k".into(), serde_json::json!("a"));
+        store
+            .merge_session_metadata("s-a", a)
+            .await
+            .expect("merge a");
+        let mut b = serde_json::Map::new();
+        b.insert("k".into(), serde_json::json!("b"));
+        store
+            .merge_session_metadata("s-b", b)
+            .await
+            .expect("merge b");
+
+        store.delete_session("s-a").await.expect("delete");
+
+        assert!(store
+            .get_session_metadata("s-a")
+            .await
+            .expect("get a")
+            .is_empty());
+        assert_eq!(
+            store.get_session_metadata("s-b").await.expect("get b")["k"],
+            serde_json::json!("b")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_metadata_same_key_overwrites() {
+        let store = InMemoryEntryStore::new();
+
+        let mut first = serde_json::Map::new();
+        first.insert("task_ids".into(), serde_json::json!(["1"]));
+        store
+            .merge_session_metadata("s1", first)
+            .await
+            .expect("first");
+
+        let mut second = serde_json::Map::new();
+        second.insert("task_ids".into(), serde_json::json!(["1", "2"]));
+        store
+            .merge_session_metadata("s1", second)
+            .await
+            .expect("second");
+
+        let meta = store.get_session_metadata("s1").await.expect("get");
+        assert_eq!(meta["task_ids"], serde_json::json!(["1", "2"]));
+    }
+
+    #[tokio::test]
+    async fn test_append_values_creates_the_key_for_an_unknown_session() {
+        let store = InMemoryEntryStore::new();
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into()])
+            .await
+            .expect("append");
+
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["task_ids"],
+            serde_json::json!(["1"])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_append_values_unions_across_calls() {
+        let store = InMemoryEntryStore::new();
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into(), "2".into()])
+            .await
+            .expect("first");
+        store
+            .append_session_metadata_values("s1", "task_ids", &["2".into(), "3".into()])
+            .await
+            .expect("second");
+
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["task_ids"],
+            serde_json::json!(["1", "2", "3"])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_append_values_empty_writes_nothing() {
+        let store = InMemoryEntryStore::new();
+        store
+            .append_session_metadata_values("s1", "task_ids", &[])
+            .await
+            .expect("append");
+
+        assert!(store
+            .get_session_metadata("s1")
+            .await
+            .expect("get")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_append_values_rejects_a_non_array_value() {
+        let store = InMemoryEntryStore::new();
+        let mut patch = serde_json::Map::new();
+        patch.insert("task_ids".into(), serde_json::json!("oops"));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("seed");
+
+        assert!(matches!(
+            store
+                .append_session_metadata_values("s1", "task_ids", &["1".into()])
+                .await,
+            Err(crate::store::StoreError::InvalidInput(_))
+        ));
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["task_ids"],
+            serde_json::json!("oops")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_append_values_leaves_other_metadata_keys_alone() {
+        let store = InMemoryEntryStore::new();
+        let mut patch = serde_json::Map::new();
+        patch.insert("project_id".into(), serde_json::json!("p1"));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("seed");
+
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into()])
+            .await
+            .expect("append");
+
+        let meta = store.get_session_metadata("s1").await.expect("get");
+        assert_eq!(meta["project_id"], serde_json::json!("p1"));
+        assert_eq!(meta["task_ids"], serde_json::json!(["1"]));
+    }
+
+    #[tokio::test]
+    async fn test_delete_session_clears_appended_values_too() {
+        let store = InMemoryEntryStore::new();
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into()])
+            .await
+            .expect("append");
+        store.delete_session("s1").await.expect("delete");
+
+        assert!(store
+            .get_session_metadata("s1")
+            .await
+            .expect("get")
+            .is_empty());
     }
 }
 

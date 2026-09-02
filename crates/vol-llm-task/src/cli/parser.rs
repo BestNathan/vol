@@ -10,6 +10,21 @@ use clap::{value_parser, Arg, ArgAction, Command};
 use super::commands::ParsedCommand;
 
 // ---------------------------------------------------------------------------
+// Value parsers
+// ---------------------------------------------------------------------------
+
+/// clap value parser for task id arguments.
+///
+/// Accepts the canonical `1` and the historical `t1`. Returns `u64` so
+/// `ParsedCommand` keeps carrying plain integers.
+fn parse_task_id_arg(s: &str) -> Result<u64, String> {
+    use std::str::FromStr;
+    crate::model::TaskId::from_str(s)
+        .map(|id| id.0)
+        .map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
 // Tokenizer
 // ---------------------------------------------------------------------------
 
@@ -79,14 +94,14 @@ pub(crate) fn build_cli() -> Command {
                     Arg::new("deps")
                         .long("deps")
                         .value_delimiter(',')
-                        .value_parser(value_parser!(u64))
+                        .value_parser(parse_task_id_arg)
                         .help("Dependency task IDs"),
                 )
                 .arg(
                     Arg::new("blocks")
                         .long("blocks")
                         .value_delimiter(',')
-                        .value_parser(value_parser!(u64))
+                        .value_parser(parse_task_id_arg)
                         .help("Blocked task IDs"),
                 ),
         )
@@ -97,7 +112,7 @@ pub(crate) fn build_cli() -> Command {
                     Arg::new("id")
                         .long("id")
                         .required(true)
-                        .value_parser(value_parser!(u64))
+                        .value_parser(parse_task_id_arg)
                         .help("Task ID"),
                 )
                 .arg(
@@ -118,14 +133,14 @@ pub(crate) fn build_cli() -> Command {
                     Arg::new("addDeps")
                         .long("addDeps")
                         .value_delimiter(',')
-                        .value_parser(value_parser!(u64))
+                        .value_parser(parse_task_id_arg)
                         .help("Dependency task IDs to add"),
                 )
                 .arg(
                     Arg::new("addBlocks")
                         .long("addBlocks")
                         .value_delimiter(',')
-                        .value_parser(value_parser!(u64))
+                        .value_parser(parse_task_id_arg)
                         .help("Blocked task IDs to add"),
                 ),
         )
@@ -134,7 +149,7 @@ pub(crate) fn build_cli() -> Command {
                 Arg::new("id")
                     .long("id")
                     .required(true)
-                    .value_parser(value_parser!(u64))
+                    .value_parser(parse_task_id_arg)
                     .help("Task ID"),
             ),
         )
@@ -158,7 +173,7 @@ pub(crate) fn build_cli() -> Command {
                 Arg::new("id")
                     .long("id")
                     .required(true)
-                    .value_parser(value_parser!(u64))
+                    .value_parser(parse_task_id_arg)
                     .help("Task ID"),
             ),
         )
@@ -169,7 +184,7 @@ pub(crate) fn build_cli() -> Command {
                     Arg::new("id")
                         .long("id")
                         .required(true)
-                        .value_parser(value_parser!(u64))
+                        .value_parser(parse_task_id_arg)
                         .help("Task ID"),
                 )
                 .arg(
@@ -190,7 +205,7 @@ pub(crate) fn build_cli() -> Command {
             Command::new("claim").about("Claim a pending task").arg(
                 Arg::new("id")
                     .long("id")
-                    .value_parser(value_parser!(u64))
+                    .value_parser(parse_task_id_arg)
                     .help("Task ID (default: first available)"),
             ),
         )
@@ -223,7 +238,7 @@ pub(crate) fn build_cli() -> Command {
                     Arg::new("id")
                         .long("id")
                         .required(true)
-                        .value_parser(value_parser!(u64))
+                        .value_parser(parse_task_id_arg)
                         .help("Task ID"),
                 ),
         )
@@ -539,6 +554,30 @@ mod tests {
             ParsedCommand::Get { id: 1, json: true } => {}
             _ => panic!("expected Get with json=true"),
         }
+    }
+
+    #[test]
+    fn test_parse_task_id_arg_accepts_plain_and_prefixed() {
+        assert_eq!(parse_task_id_arg("1").unwrap(), 1);
+        assert_eq!(parse_task_id_arg("t1").unwrap(), 1);
+        assert_eq!(parse_task_id_arg("42").unwrap(), 42);
+        assert_eq!(parse_task_id_arg("t42").unwrap(), 42);
+    }
+
+    #[test]
+    fn test_parse_task_id_arg_rejects_malformed() {
+        assert!(parse_task_id_arg("ttt1").is_err());
+        assert!(parse_task_id_arg("abc").is_err());
+        assert!(parse_task_id_arg("").is_err());
+    }
+
+    #[test]
+    fn test_get_accepts_prefixed_id_end_to_end() {
+        // The loop that motivated this work: the model echoes back an id it
+        // was shown. Both spellings must reach the same task.
+        let plain = parse("get --id 7").expect("plain id parses");
+        let prefixed = parse("get --id t7").expect("prefixed id parses");
+        assert_eq!(format!("{plain:?}"), format!("{prefixed:?}"));
     }
 
     #[test]

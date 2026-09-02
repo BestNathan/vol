@@ -165,8 +165,10 @@ export interface McpPromptArgInfo {
 }
 // TaskEntry — mirrors data_plane/handlers/task.rs JSON: created_at/started_at/completed_at are
 // epoch seconds (numbers); publisher/assignee/active_form serialize as null when unset.
+// `id` / `dependencies` / `blocks` are decimal-digit strings ("1", not 1 and not "t1") — TaskId
+// serializes as a string on the wire.
 export interface TaskEntry {
-  id: number
+  id: string
   status: string
   kind: string
   publisher?: string | null
@@ -174,8 +176,8 @@ export interface TaskEntry {
   subject: string
   description: string
   active_form?: string | null
-  dependencies: number[]
-  blocks: number[]
+  dependencies: string[]
+  blocks: string[]
   created_at: number
   started_at?: number | null
   completed_at?: number | null

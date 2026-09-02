@@ -40,7 +40,7 @@ async fn test_full_agent_session_with_cli_tool() {
     println!("[T2 create] {}", r.content);
     assert!(r.success);
     assert!(r.content.contains("Implement login"));
-    assert!(r.content.contains("Task t1"));
+    assert!(r.content.contains("Task 1"));
 
     // Turn 3: Agent quick-creates two more tasks
     for name in &["Write tests", "Update docs"] {
@@ -73,7 +73,7 @@ async fn test_full_agent_session_with_cli_tool() {
         .unwrap();
     println!("[T6 update] {}", r.content);
     assert!(r.success);
-    assert!(r.content.contains("Task t1 updated"));
+    assert!(r.content.contains("Task 1 updated"));
 
     // Turn 7: Agent checks task 1 details
     let r = run(&tool, &ctx, "get --id 1").await.unwrap();
@@ -83,11 +83,11 @@ async fn test_full_agent_session_with_cli_tool() {
     assert!(r.content.contains("Implement login"));
     assert!(r.content.contains("coding-agent"));
 
-    // Turn 8: Agent claims first ready task (one of t2 or t3)
+    // Turn 8: Agent claims first ready task (one of task 2 or task 3)
     let r = run(&tool, &ctx, "+claim").await.unwrap();
     println!("[T8 +claim] {}", r.content);
     assert!(r.success);
-    assert!(r.content.contains("Task t"));
+    assert!(r.content.contains("Task 2") || r.content.contains("Task 3"));
     assert!(r.content.contains("claimed"));
     assert!(r.content.contains("Running"));
 

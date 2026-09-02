@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use vol_llm_task::{TaskId, TaskStatus, TaskStore};
+use vol_llm_task::{TaskStatus, TaskStore};
 
 use vol_llm_agent_protocol::agent_server_protocol::{
     AgentServerMessage, Operation, Payload, ProtocolError, TaskOperation, TaskPayload,
@@ -59,7 +59,7 @@ impl DomainHandler for TaskHandler {
                     })
                     .map(|t| {
                         serde_json::json!({
-                            "id": t.id.0,
+                            "id": t.id,
                             "status": format!("{:?}", t.status).to_lowercase(),
                             "kind": format!("{:?}", t.kind).to_lowercase(),
                             "publisher": t.publisher,
@@ -67,8 +67,8 @@ impl DomainHandler for TaskHandler {
                             "subject": t.subject,
                             "description": t.description,
                             "active_form": t.active_form,
-                            "dependencies": t.dependencies.iter().map(|d| d.0).collect::<Vec<_>>(),
-                            "blocks": t.blocks.iter().map(|d| d.0).collect::<Vec<_>>(),
+                            "dependencies": t.dependencies,
+                            "blocks": t.blocks,
                             "created_at": t.created_at.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
                             "started_at": t.started_at.and_then(|s| s.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).ok()),
                             "completed_at": t.completed_at.and_then(|s| s.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).ok()),
@@ -82,10 +82,10 @@ impl DomainHandler for TaskHandler {
                 )])
             }
             (TaskOperation::Get, Payload::Task(TaskPayload::Get { task_id })) => {
-                let task = self.store.get(&TaskId(task_id)).await.unwrap_or(None);
+                let task = self.store.get(&task_id).await.unwrap_or(None);
                 let task_json = task.map(|t| {
                     serde_json::json!({
-                        "id": t.id.0,
+                        "id": t.id,
                         "status": format!("{:?}", t.status).to_lowercase(),
                         "kind": format!("{:?}", t.kind).to_lowercase(),
                         "publisher": t.publisher,
@@ -93,8 +93,8 @@ impl DomainHandler for TaskHandler {
                         "subject": t.subject,
                         "description": t.description,
                         "active_form": t.active_form,
-                        "dependencies": t.dependencies.iter().map(|d| d.0).collect::<Vec<_>>(),
-                        "blocks": t.blocks.iter().map(|d| d.0).collect::<Vec<_>>(),
+                        "dependencies": t.dependencies,
+                        "blocks": t.blocks,
                         "created_at": t.created_at.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
                         "started_at": t.started_at.and_then(|s| s.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).ok()),
                         "completed_at": t.completed_at.and_then(|s| s.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).ok()),
@@ -122,7 +122,7 @@ mod tests {
         AgentServerMessage, MessageKind, Operation, Payload, TaskOperation, TaskPayload,
     };
     use vol_llm_agent_protocol::DomainHandler;
-    use vol_llm_task::InMemoryTaskStore;
+    use vol_llm_task::{InMemoryTaskStore, Task, TaskId, TaskKind, TaskStore};
 
     use super::TaskHandler;
 
@@ -137,6 +137,113 @@ mod tests {
             payload,
             meta: Default::default(),
         }
+    }
+
+    /// Store holding a single dependency-free task, which gets id 1.
+    async fn handler_with_one_task() -> TaskHandler {
+        let store = Arc::new(InMemoryTaskStore::new());
+        store
+            .create(Task::new(TaskKind::Manual, "first".to_string(), vec![]))
+            .await
+            .expect("create first");
+        TaskHandler::new(store)
+    }
+
+    /// Store holding task 1 (blocks task 2) and task 2 (depends on task 1).
+    async fn handler_with_dependent_task() -> TaskHandler {
+        let store = Arc::new(InMemoryTaskStore::new());
+        let first = store
+            .create(Task::new(TaskKind::Manual, "first".to_string(), vec![]))
+            .await
+            .expect("create first");
+        let second = store
+            .create(Task::new(
+                TaskKind::Manual,
+                "second".to_string(),
+                vec![first],
+            ))
+            .await
+            .expect("create second");
+        let mut first_task = store
+            .get(&first)
+            .await
+            .expect("get first")
+            .expect("present");
+        first_task.blocks = vec![second];
+        store.update(first_task).await.expect("update first");
+        TaskHandler::new(store)
+    }
+
+    async fn list(handler: &TaskHandler) -> serde_json::Value {
+        let replies = handler
+            .handle(msg(
+                "1",
+                Operation::Task(TaskOperation::List),
+                Payload::Task(TaskPayload::List {
+                    status: None,
+                    assignee: None,
+                }),
+            ))
+            .await
+            .expect("list");
+        replies[0].payload.data_json()
+    }
+
+    async fn get(handler: &TaskHandler, task_id: TaskId) -> serde_json::Value {
+        let replies = handler
+            .handle(msg(
+                "1",
+                Operation::Task(TaskOperation::Get),
+                Payload::Task(TaskPayload::Get { task_id }),
+            ))
+            .await
+            .expect("get");
+        replies[0].payload.data_json()
+    }
+
+    #[tokio::test]
+    async fn test_task_list_emits_string_ids() {
+        let handler = handler_with_one_task().await;
+        let result = list(&handler).await;
+        let tasks = result["tasks"].as_array().expect("array");
+        assert_eq!(tasks[0]["id"], serde_json::json!("1"));
+        assert_eq!(tasks[0]["dependencies"], serde_json::json!([]));
+        assert_eq!(tasks[0]["blocks"], serde_json::json!([]));
+    }
+
+    #[tokio::test]
+    async fn test_task_list_emits_string_ids_in_dependency_arrays() {
+        let handler = handler_with_dependent_task().await;
+        let result = list(&handler).await;
+        let tasks = result["tasks"].as_array().expect("array");
+        let first = tasks
+            .iter()
+            .find(|t| t["id"] == serde_json::json!("1"))
+            .expect("task 1");
+        let second = tasks
+            .iter()
+            .find(|t| t["id"] == serde_json::json!("2"))
+            .expect("task 2");
+        assert_eq!(first["blocks"], serde_json::json!(["2"]));
+        assert_eq!(second["dependencies"], serde_json::json!(["1"]));
+    }
+
+    #[tokio::test]
+    async fn test_task_get_emits_string_ids_including_dependencies() {
+        let handler = handler_with_dependent_task().await;
+        let result = get(&handler, TaskId(2)).await;
+        assert_eq!(result["task"]["id"], serde_json::json!("2"));
+        assert_eq!(result["task"]["dependencies"], serde_json::json!(["1"]));
+        assert_eq!(result["task"]["blocks"], serde_json::json!([]));
+    }
+
+    #[tokio::test]
+    async fn test_task_get_emits_string_ids_in_blocks() {
+        let handler = handler_with_dependent_task().await;
+        let result = get(&handler, TaskId(1)).await;
+        assert_eq!(result["task"]["id"], serde_json::json!("1"));
+        assert_eq!(result["task"]["blocks"], serde_json::json!(["2"]));
+        assert_eq!(result["task"]["dependencies"], serde_json::json!([]));
     }
 
     #[tokio::test]
@@ -167,7 +274,9 @@ mod tests {
             .handle(msg(
                 "1",
                 Operation::Task(TaskOperation::Get),
-                Payload::Task(TaskPayload::Get { task_id: 99999 }),
+                Payload::Task(TaskPayload::Get {
+                    task_id: TaskId(99999),
+                }),
             ))
             .await
             .unwrap();
@@ -198,7 +307,7 @@ mod tests {
             .handle(msg(
                 "1",
                 Operation::Task(TaskOperation::List),
-                Payload::Task(TaskPayload::Get { task_id: 0 }),
+                Payload::Task(TaskPayload::Get { task_id: TaskId(0) }),
             ))
             .await
             .unwrap_err();

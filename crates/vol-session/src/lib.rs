@@ -28,5 +28,5 @@ pub use manager::{FileSessionManager, SessionInfo, SessionManager};
 pub use memory_store::{InMemoryEntryStore, InMemoryMessageStore, InMemorySessionStore};
 pub use message::SessionMessage;
 pub use recorder::SessionRecorderPlugin;
-pub use session::Session;
+pub use session::{Session, TASK_IDS_KEY};
 pub use store::{MessageStore, SessionEntryStore, SessionStore, StoreError};

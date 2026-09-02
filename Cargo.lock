@@ -7674,6 +7674,7 @@ dependencies = [
  "vol-llm-provider",
  "vol-llm-sandbox",
  "vol-llm-skill",
+ "vol-llm-task",
  "vol-llm-tool",
  "vol-llm-tracing",
  "vol-session",
@@ -7697,6 +7698,7 @@ dependencies = [
  "vol-llm-agent",
  "vol-llm-core",
  "vol-llm-sandbox",
+ "vol-llm-task",
 ]
 
 [[package]]

@@ -59,7 +59,7 @@ export function TasksPanel() {
   const [loading, setLoading] = useAtom(tasksLoadingAtom)
   const setCache = useSetAtom(nodeDataCacheAtom)
   const [error, setError] = useState<string | null>(null)
-  const [graphCenter, setGraphCenter] = useState<number | null>(null)
+  const [graphCenter, setGraphCenter] = useState<string | null>(null)
 
   // Live node mirror for the stale-response guard in async callbacks.
   const nodeIdRef = useRef(nodeId)
@@ -138,13 +138,13 @@ export function TasksPanel() {
   }, [connectionState, nodeId, loadTasks, setCache])
 
   const toggleRow = useCallback(
-    (id: number) => {
+    (id: string) => {
       setSelectedId((cur) => (cur === id ? null : id))
     },
     [setSelectedId],
   )
 
-  const openGraph = useCallback((id: number) => {
+  const openGraph = useCallback((id: string) => {
     setGraphCenter(id)
   }, [])
 
@@ -199,7 +199,7 @@ export function TasksPanel() {
   const filtered = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter)
 
   /** Shared row body: id, status badge, subject, assignee, deps button, and the
-   *  expandable detail (description + dependency/block tN links). */
+   *  expandable detail (description + dependency/block id links). */
   const rowBody = (task: TaskEntry) => {
     const expanded = selectedId === task.id
     const color = statusColor(task.status)
@@ -207,7 +207,7 @@ export function TasksPanel() {
       <>
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[11px] text-muted-foreground/60 font-mono whitespace-nowrap">
-            t{task.id}
+            {task.id}
           </span>
           <Badge
             variant="secondary"
@@ -258,7 +258,7 @@ export function TasksPanel() {
                         openGraph(dep)
                       }}
                     >
-                      t{dep}
+                      {dep}
                     </Button>
                   </span>
                 ))}
@@ -280,7 +280,7 @@ export function TasksPanel() {
                         openGraph(blk)
                       }}
                     >
-                      t{blk}
+                      {blk}
                     </Button>
                   </span>
                 ))}

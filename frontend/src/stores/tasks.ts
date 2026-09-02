@@ -7,5 +7,5 @@ import { atom } from 'jotai'
 import type { TaskEntry } from '@/types'
 export const tasksAtom = atom<TaskEntry[]>([])
 export const statusFilterAtom = atom<string>('all')
-export const selectedTaskIdAtom = atom<number | null>(null)
+export const selectedTaskIdAtom = atom<string | null>(null)
 export const tasksLoadingAtom = atom(false)

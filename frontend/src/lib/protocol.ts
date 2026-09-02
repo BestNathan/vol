@@ -81,7 +81,15 @@ export interface AgentEvent {
 // Task 1.4's JsonRpcClient resolves RPC results by these envelope keys.
 export interface RpcMethods {
   'agent.submit': {
-    params: { input: string; target?: string }
+    params: {
+      input: {
+        run_id?: string
+        parts: Array<{ type: 'text'; text: string } | { type: 'image_url'; url: string }>
+        metadata?: Record<string, unknown>
+        task_ids?: string[]
+      }
+      target?: string
+    }
     result: {
       run_id: string
       accepted: boolean
@@ -160,7 +168,7 @@ export interface RpcMethods {
   'sandbox.list': { params: object; result: { sandboxes: SandboxInfo[] } }
   'sandbox.list_specs': { params: object; result: { specs: SandboxSpecInfo[] } }
   'task.list': { params: { status?: string; assignee?: string }; result: { tasks: TaskEntry[] } }
-  'task.get': { params: { task_id: number }; result: { task: TaskEntry | null } }
+  'task.get': { params: { task_id: string }; result: { task: TaskEntry | null } }
   'log.list': { params: object; result: { runs: LogRunSummary[] } }
   'log.read': { params: { run_id: string }; result: { entries: LogLine[] } }
   'system.connected': { params: object; result: ConnectedInfo }

@@ -10,7 +10,7 @@ mod store;
 mod stores;
 pub mod tools;
 
-pub use model::{Task, TaskId, TaskKind, TaskResult, TaskStatus};
+pub use model::{ParseTaskIdError, Task, TaskId, TaskKind, TaskResult, TaskStatus};
 pub use scheduler::TaskScheduler;
 pub use store::{Result, StoreError, TaskStore};
 pub use stores::{DatabaseTaskStore, FileTaskStore, InMemoryTaskStore};

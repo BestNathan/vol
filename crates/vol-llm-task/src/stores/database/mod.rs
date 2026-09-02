@@ -542,6 +542,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sqlite_reads_legacy_dependencies_json() {
+        // dependencies_json / blocks_json rows written before the change hold
+        // "[1,2]", not "[\"1\",\"2\"]".
+        use crate::model::{Task, TaskId, TaskKind};
+        use crate::store::TaskStore;
+        use sea_orm::sea_query::Expr;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+        let (store, _dir) = sqlite_store().await;
+        let id = store
+            .create(Task::new(
+                TaskKind::Agent,
+                "legacy deps".to_string(),
+                vec![],
+            ))
+            .await
+            .expect("create");
+
+        // Overwrite the columns with the pre-change encoding.
+        entity::Entity::update_many()
+            .col_expr(entity::Column::DependenciesJson, Expr::value("[1,2]"))
+            .col_expr(entity::Column::BlocksJson, Expr::value("[3]"))
+            .filter(entity::Column::Id.eq(mapping::task_id_to_db(id).unwrap()))
+            .exec(&store.db)
+            .await
+            .expect("raw column update");
+
+        let loaded = store.get(&id).await.expect("get").expect("present");
+        assert_eq!(loaded.dependencies, vec![TaskId(1), TaskId(2)]);
+        assert_eq!(loaded.blocks, vec![TaskId(3)]);
+    }
+
+    #[tokio::test]
     async fn sqlite_connect_runs_migration() {
         use sea_orm::{ConnectionTrait, Statement};
 

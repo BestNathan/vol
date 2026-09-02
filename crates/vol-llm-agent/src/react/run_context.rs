@@ -42,6 +42,11 @@ pub struct RunContext {
     pub session_id: String,
     /// Model used for this run, from LLM config.
     pub model: String,
+    /// Task ids bound to this run. Populated from `AgentInput.task_ids`.
+    ///
+    /// Nothing reads this yet — it is the attachment point for context
+    /// injection and tool scoping.
+    pub task_ids: Vec<vol_llm_task::TaskId>,
 
     // Mutable state (internal mutability via AtomicU32 and Arc<RwLock>)
     pub iteration: AtomicU32,
@@ -138,6 +143,7 @@ impl RunContext {
                 config.llm.model().to_string()
             },
             iteration: AtomicU32::new(0),
+            task_ids: Vec::new(),
             all_tool_calls: Arc::new(RwLock::new(Vec::new())),
             current_tool_calls: Arc::new(RwLock::new(Vec::new())),
             data: Arc::new(RwLock::new(HashMap::new())),
@@ -154,6 +160,13 @@ impl RunContext {
         };
 
         (ctx, plugin_event_rx)
+    }
+
+    /// Attach task ids to this context.
+    #[must_use]
+    pub fn with_task_ids(mut self, task_ids: Vec<vol_llm_task::TaskId>) -> Self {
+        self.task_ids = task_ids;
+        self
     }
 
     /// Get the current iteration number
@@ -447,6 +460,7 @@ impl Clone for RunContext {
             session_id: self.session_id.clone(),
             model: self.model.clone(),
             iteration: AtomicU32::new(self.current_iteration()),
+            task_ids: self.task_ids.clone(),
             all_tool_calls: self.all_tool_calls.clone(),
             current_tool_calls: self.current_tool_calls.clone(),
             data: self.data.clone(),
@@ -487,6 +501,30 @@ mod tests {
         assert_eq!(ctx.user_input, "test input");
         assert_eq!(ctx.session_id, ctx.session.id);
         assert_eq!(ctx.current_iteration(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_run_context_starts_with_no_task_ids() {
+        let ctx = create_test_context();
+        assert!(ctx.task_ids.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_with_task_ids_attaches_them() {
+        let ctx = create_test_context()
+            .with_task_ids(vec![vol_llm_task::TaskId(1), vol_llm_task::TaskId(2)]);
+        assert_eq!(
+            ctx.task_ids,
+            vec![vol_llm_task::TaskId(1), vol_llm_task::TaskId(2)]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_with_task_ids_replaces_rather_than_appends() {
+        let ctx = create_test_context()
+            .with_task_ids(vec![vol_llm_task::TaskId(1)])
+            .with_task_ids(vec![vol_llm_task::TaskId(9)]);
+        assert_eq!(ctx.task_ids, vec![vol_llm_task::TaskId(9)]);
     }
 
     #[tokio::test]

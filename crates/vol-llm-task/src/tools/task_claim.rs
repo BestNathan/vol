@@ -45,7 +45,7 @@ impl ExecutableTool for TaskClaim {
             "properties": {
                 "taskId": {
                     "type": "string",
-                    "description": "ID of the task to claim (e.g. 't1', 't42')"
+                    "description": "ID of the task to claim (e.g. '1', '42')"
                 }
             },
             "required": ["taskId"]
@@ -64,11 +64,12 @@ impl ExecutableTool for TaskClaim {
         let params: TaskClaimParams = serde_json::from_value(args.clone())
             .map_err(|e| ToolError::InvalidArguments(format!("Failed to parse task ID: {e}")))?;
 
-        let raw = params.task_id.trim_start_matches('t');
-        let id_num: u64 = raw.parse().map_err(|_| {
-            ToolError::InvalidArguments(format!("Invalid task ID: {}", params.task_id))
-        })?;
-        let task_id = TaskId(id_num);
+        let task_id = {
+            use std::str::FromStr;
+            TaskId::from_str(&params.task_id).map_err(|_| {
+                ToolError::InvalidArguments(format!("Invalid task ID: {}", params.task_id))
+            })?
+        };
 
         let caller_type = context
             .agent_def
@@ -228,11 +229,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_claim_accepts_single_t_prefix() {
+        let store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new());
+        let task = Task::new(TaskKind::Agent, "Prefixed".into(), vec![]);
+        let task_id = store.create(task).await.unwrap();
+
+        let tool = TaskClaim::new(store.clone());
+        let ctx = make_context("coding");
+        let args = serde_json::json!({"taskId": format!("t{}", task_id.0)});
+        let result = tool.execute(&args, &ctx).await.unwrap();
+        assert!(result.success);
+    }
+
+    #[tokio::test]
+    async fn test_claim_rejects_repeated_t_prefix() {
+        // The previous trim_start_matches('t') accepted "ttt1" as id 1.
+        let store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new());
+        let task = Task::new(TaskKind::Agent, "Prefixed".into(), vec![]);
+        store.create(task).await.unwrap();
+
+        let tool = TaskClaim::new(store.clone());
+        let ctx = make_context("coding");
+        let args = serde_json::json!({"taskId": "ttt1"});
+        let err = tool.execute(&args, &ctx).await.unwrap_err().to_string();
+        assert!(err.contains("Invalid task ID"), "unexpected error: {err}");
+    }
+
+    #[tokio::test]
     async fn test_claim_not_found() {
         let store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new());
         let tool = TaskClaim::new(store.clone());
         let ctx = make_context("coding");
-        let args = serde_json::json!({"taskId": "t999"});
+        let args = serde_json::json!({"taskId": "999"});
         let result = tool.execute(&args, &ctx).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));

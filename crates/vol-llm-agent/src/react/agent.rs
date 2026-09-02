@@ -486,8 +486,26 @@ impl ReActAgent {
             run_state: &self.run_state,
         };
 
-        let (mut run_ctx, plugin_rx) =
+        let (run_ctx, plugin_rx) =
             RunContext::new(run_id.clone(), user_input.clone(), self.config.clone());
+        // Attach before any clone of run_ctx reaches a spawned task.
+        let mut run_ctx = run_ctx.with_task_ids(input.task_ids.clone());
+
+        // Record the task binding on the session. Union semantics; a failure is
+        // logged and the run continues — binding is metadata and must not kill
+        // a user's run.
+        if !input.task_ids.is_empty() {
+            let ids: Vec<String> = input.task_ids.iter().map(ToString::to_string).collect();
+            if let Err(e) = run_ctx.session.bind_task_ids(&ids).await {
+                tracing::warn!(
+                    run_id = %run_ctx.run_id,
+                    session_id = %run_ctx.session_id,
+                    task_ids = ?ids,
+                    error = %e,
+                    "failed to bind task ids to session"
+                );
+            }
+        }
 
         // Resolve tools and skills once at run start (overlay > AgentDef > global).
         let sid = run_ctx.session_id.clone();
@@ -1613,5 +1631,113 @@ mod tests {
         let agent = ReActAgent::new(config, base_tools, skills);
 
         assert!(Arc::ptr_eq(agent.llm(), &llm));
+    }
+
+    // ── Task-id binding on run ──
+
+    /// Agent over the stub LLM, plus a handle to the very session it records to.
+    fn agent_with_stub_llm() -> (ReActAgent, Arc<Session>) {
+        let session = Arc::new(Session::new(Arc::new(InMemoryEntryStore::new())));
+        let base_tools = Arc::new(ToolRegistry::new());
+        let config = AgentConfig::builder()
+            .with_llm(Arc::new(MockLlm))
+            .with_tools(base_tools.clone())
+            .with_session(session.clone())
+            .build()
+            .expect("test config build failed");
+        let agent = ReActAgent::new(config, base_tools, Arc::new(SkillLoader::new_empty()));
+        (agent, session)
+    }
+
+    #[tokio::test]
+    async fn test_run_binds_task_ids_to_session() {
+        let (agent, session) = agent_with_stub_llm();
+
+        let mut input = AgentInput::text("do the thing");
+        input.task_ids = vec![vol_llm_task::TaskId(1), vol_llm_task::TaskId(2)];
+        agent.run_input(input).await.expect("run");
+
+        assert_eq!(session.task_ids().await.expect("read"), vec!["1", "2"]);
+    }
+
+    #[tokio::test]
+    async fn test_second_run_unions_task_ids() {
+        let (agent, session) = agent_with_stub_llm();
+
+        let mut first = AgentInput::text("one");
+        first.task_ids = vec![vol_llm_task::TaskId(1)];
+        agent.run_input(first).await.expect("first run");
+
+        let mut second = AgentInput::text("two");
+        second.task_ids = vec![vol_llm_task::TaskId(2)];
+        agent.run_input(second).await.expect("second run");
+
+        assert_eq!(session.task_ids().await.expect("read"), vec!["1", "2"]);
+    }
+
+    #[tokio::test]
+    async fn test_run_without_task_ids_writes_nothing() {
+        let (agent, session) = agent_with_stub_llm();
+        agent
+            .run_input(AgentInput::text("no ids"))
+            .await
+            .expect("run");
+        assert!(session.task_ids().await.expect("read").is_empty());
+        assert!(!session
+            .metadata()
+            .await
+            .expect("meta")
+            .contains_key(vol_session::TASK_IDS_KEY));
+    }
+
+    #[tokio::test]
+    async fn test_task_ids_bind_as_bare_canonical_digits() {
+        let (agent, session) = agent_with_stub_llm();
+
+        let mut input = AgentInput::text("big ids");
+        input.task_ids = vec![vol_llm_task::TaskId(10), vol_llm_task::TaskId(2)];
+        agent.run_input(input).await.expect("run");
+
+        // Stored as strings of bare digits — no `t` prefix — and readable back
+        // through TaskId::from_str.
+        assert_eq!(
+            session.metadata().await.expect("meta")[vol_session::TASK_IDS_KEY],
+            serde_json::json!(["10", "2"])
+        );
+        let round_tripped: Vec<vol_llm_task::TaskId> = session
+            .task_ids()
+            .await
+            .expect("read")
+            .iter()
+            .map(|s| s.parse().expect("parse back into TaskId"))
+            .collect();
+        assert_eq!(
+            round_tripped,
+            vec![vol_llm_task::TaskId(2), vol_llm_task::TaskId(10)]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_failed_bind_does_not_abort_run() {
+        let (agent, session) = agent_with_stub_llm();
+
+        // Poison the key with a non-array so bind_task_ids fails rather than
+        // clobbering it.
+        let mut patch = serde_json::Map::new();
+        patch.insert(vol_session::TASK_IDS_KEY.into(), serde_json::json!(42));
+        session.merge_metadata(patch).await.expect("poison");
+
+        let mut input = AgentInput::text("still runs");
+        input.task_ids = vec![vol_llm_task::TaskId(1)];
+        let response = agent.run_input(input).await.expect("run must still finish");
+
+        // The run completed and recorded to the session.
+        assert_eq!(response.session_id, session.id);
+        assert!(!session.get_messages().await.expect("messages").is_empty());
+        // The bind genuinely failed — the poisoned value is untouched.
+        assert_eq!(
+            session.metadata().await.expect("meta")[vol_session::TASK_IDS_KEY],
+            serde_json::json!(42)
+        );
     }
 }

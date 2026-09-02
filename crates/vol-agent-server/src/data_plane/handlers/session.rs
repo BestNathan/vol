@@ -93,6 +93,7 @@ impl DomainHandler for SessionHandler {
                         "session_id": s.session_id,
                         "entry_count": s.entry_count,
                         "created_at": s.created_at,
+                        "metadata": s.metadata,
                     })
                 })
                 .collect();
@@ -257,5 +258,87 @@ impl DomainHandler for SessionHandler {
                 Err(ProtocolError::PayloadDecodeFailed("session.entries"))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use vol_llm_agent_protocol::agent_server_protocol::{
+        AgentServerMessage, MessageKind, Operation, Payload, SessionOperation, SessionPayload,
+    };
+    use vol_llm_agent_protocol::DomainHandler;
+    use vol_session::{DatabaseSessionManager, SessionManager};
+
+    use crate::data_plane::router::AgentRouter;
+
+    use super::SessionHandler;
+
+    fn msg(id: &str, op: Operation, payload: Payload) -> AgentServerMessage {
+        AgentServerMessage {
+            protocol: "agent-server/1".to_string(),
+            message_id: id.to_string(),
+            sender: "client".to_string(),
+            receiver: "data-plane".to_string(),
+            kind: MessageKind::Command,
+            operation: op,
+            payload,
+            meta: Default::default(),
+        }
+    }
+
+    /// Set up a handler over a database-backed manager with a single session
+    /// that has a task_ids binding. The database backend is what the production
+    /// path uses, and it is the one that carries metadata through the
+    /// `session_model_to_info` mapping we changed in this task.
+    async fn handler_with_bound_session() -> (SessionHandler, tempfile::TempDir) {
+        let temp = tempfile::tempdir().unwrap();
+        let url = format!("sqlite://{}", temp.path().join("sessions.db").display());
+        let manager = DatabaseSessionManager::connect(&url).await.unwrap();
+        let store = manager.entry_store_for_agent("agent-a");
+        store
+            .save(vol_session::entry::SessionEntry {
+                id: "entry-1".into(),
+                session_id: "s1".into(),
+                created_at: 10,
+                parent_id: None,
+                r#type: vol_session::entry::SessionEntryType::Summary,
+                data: vol_session::entry::SessionEntryData::Summary {
+                    summary: "summary-entry-1".into(),
+                },
+            })
+            .await
+            .expect("save");
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into()])
+            .await
+            .expect("bind task_ids");
+        let manager: Arc<dyn vol_session::SessionManager> = Arc::new(manager);
+        let handler = SessionHandler::new(manager, AgentRouter::new());
+        (handler, temp)
+    }
+
+    async fn list_sessions(handler: &SessionHandler) -> serde_json::Value {
+        let replies = handler
+            .handle(msg(
+                "1",
+                Operation::Session(SessionOperation::List),
+                Payload::Session(SessionPayload::List { agent_id: None }),
+            ))
+            .await
+            .expect("list");
+        replies[0].payload.data_json()
+    }
+
+    #[tokio::test]
+    async fn test_session_list_includes_metadata() {
+        let (handler, _temp) = handler_with_bound_session().await;
+        let result = list_sessions(&handler).await;
+        let sessions = result["sessions"].as_array().expect("array");
+        assert_eq!(
+            sessions[0]["metadata"]["task_ids"],
+            serde_json::json!(["1"])
+        );
     }
 }

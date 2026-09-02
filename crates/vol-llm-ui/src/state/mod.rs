@@ -1066,7 +1066,7 @@ pub struct TaskState {
     pub loading: bool,
     pub error: Option<String>,
     pub status_filter: Option<String>,
-    pub selected_task: Option<u64>,
+    pub selected_task: Option<String>,
 }
 
 #[cfg(all(feature = "web", not(feature = "tui")))]

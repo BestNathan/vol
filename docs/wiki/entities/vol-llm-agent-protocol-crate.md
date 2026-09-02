@@ -1,16 +1,16 @@
 ---
 type: entity
 category: product
-tags: [crate, agent, transport, rust, json-rpc, control-plane]
+tags: [crate, agent, transport, rust, json-rpc, control-plane, task-id]
 created: 2026-05-05
-updated: 2026-06-10
-source_count: 20
+updated: 2026-09-02
+source_count: 21
 ---
 
 # vol-llm-agent-channel Crate
 
 **Category:** Rust crate — Agent communication channel layer
-**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]], [[agentinput-multimodal-run]], [[agentinput-channel-unification]], [[task-database-store-implementation]], [[runtime-task-store-configuration]], [[task-4-quality-issues-cleanup]]
+**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]], [[agentinput-multimodal-run]], [[agentinput-channel-unification]], [[task-database-store-implementation]], [[runtime-task-store-configuration]], [[task-4-quality-issues-cleanup]], [[vol-llm-task]]
 
 ## Overview
 
@@ -23,6 +23,8 @@ The `vol-llm-agent-channel` crate provides the protocol, transport, and dispatch
 - `AgentDispatcher` and `AgentRouter` now live in [[vol-agent-server-crate]] data-plane code as concrete execution/routing components [[agent-server-data-plane-core-move]]
 - `AgentPayload::Submit` carries `input: AgentInput` with `target` for routing — `run_id` and `metadata` live inside `AgentInput` [[agentinput-channel-unification]]
 - `AgentDispatcher` calls `agent.run_input(AgentInput)` instead of the removed `run_with_id()` [[agent-dispatcher]]
+- `TaskPayload::Get { task_id: TaskId }` carries a `vol_llm_task::TaskId` instead of a raw `u64` [[taskid-unification-session-task-binding]]. The decode branch rejects malformed ids with `ProtocolError::PayloadDecodeFailed("task.get")`. The crate depends on `vol-llm-task` (no cycle in the normal graph; `vol-llm-task` dev-depends on this crate but Cargo permits that).
+- Depends on `vol-llm-agent`. This crate must never depend on `vol-agent-server` (CLAUDE.md boundary rule, verified by `scripts/check-agent-boundaries.sh`).
 - `transport::jsonrpc` module: `JsonRpcConnection` implements `Connection` trait, and `JsonRpcServer<S>` is generic over `JsonRpcMessageService` with an explicit mount path [[jsonrpc-transport]]
 - All JSON-RPC transport code consolidated under `transport/jsonrpc/` — server, connection, codec, and serde helpers [[jsonrpc-transport-consolidation]]
 - 12 JSON-RPC methods: `agent.submit` (with optional `target`), `cancel`, `subscribe`, `unsubscribe`, `approve`, `file.list`, `file.read`, `log.list`, `log.read`, `session.list`, `session.resume` [[jsonrpc-transport]]
@@ -92,3 +94,4 @@ Concrete execution pieces (`AgentDispatcher`, `AgentRouter`, `ConnectionHolder`,
 - **2026-06-10**: Task 4 moved concrete data-plane core/router/dispatcher/handlers and `ConnectionHolder` into `vol-agent-server::data_plane`; channel now keeps protocol, connection, handler registry, request, service, and generic transport abstractions [[agent-server-data-plane-core-move]]
 - **2026-06-10**: Task 4 cleanup removed stale HTTP/example API references and pruned channel dependencies to active protocol/transport needs [[agent-server-data-plane-core-move]]
 - **2026-06-10**: Follow-up quality cleanup removed unused/mis-scoped channel dependencies, refreshed generic JSON-RPC documentation, and neutralized moved-router/dispatcher comments [[task-4-quality-issues-cleanup]]
+- **2026-09-02**: `TaskPayload::Get { task_id: u64 }` → `TaskPayload::Get { task_id: TaskId }`; decode branch uses `TaskId`'s lenient `Deserialize` (accepts `1`, `"1"`, `"t1"`, rejects `"ttt1"`/`""`/negatives). Added `vol-llm-task` dependency (no cycle). Data-plane handler emits string ids on the wire; no downstream changes needed because `AgentInput` passes by value [[taskid-unification-session-task-binding]]
