@@ -163,7 +163,7 @@ impl Session {
     /// Do NOT use it to accumulate values inside an array. The read you would
     /// need first releases the backend's lock before this write takes it, so a
     /// concurrent writer's addition is silently overwritten — see
-    /// `test_read_then_merge_loses_a_concurrent_bind`. Use
+    /// `test_documents_why_read_then_merge_must_not_be_used`. Use
     /// [`Self::bind_task_ids`], or add another atomic store operation alongside
     /// `append_session_metadata_values`.
     pub async fn merge_metadata(
@@ -577,13 +577,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_read_then_merge_loses_a_concurrent_bind() {
-        // Why bind_task_ids must not be implemented as
-        // metadata() + union + merge_metadata(): the read releases the
-        // backend's lock before the write takes it, so anything bound in
-        // between is overwritten. This is the deterministic form of the race —
-        // it pins the hazard that the atomic append exists to avoid, and keeps
-        // the doc comments on merge_metadata honest.
+    async fn test_documents_why_read_then_merge_must_not_be_used() {
+        // ILLUSTRATION, NOT A GUARD. This test inlines the broken pattern —
+        // metadata() + union + merge_metadata() — rather than exercising it
+        // through bind_task_ids, so a bind_task_ids that regressed to
+        // read-then-merge would leave every assertion below still holding. It
+        // exists to pin the hazard deterministically and to keep the doc
+        // comment on merge_metadata honest about why that path is unsafe: the
+        // read releases the backend's lock before the write takes it, so
+        // anything bound in between is overwritten.
+        //
+        // The actual regression guard on bind_task_ids is
+        // test_bind_task_ids_makes_exactly_one_atomic_store_call.
         let session = Session::new(Arc::new(InMemoryEntryStore::new()));
         session.bind_task_ids(&["1".into()]).await.expect("bind 1");
 
@@ -609,6 +614,194 @@ mod tests {
         assert_eq!(session.task_ids().await.expect("read"), vec!["1", "2", "3"]);
     }
 
+    /// Records which [`SessionEntryStore`] methods a caller invokes, delegating
+    /// each one to a real in-memory store.
+    ///
+    /// Deliberately structural. The atomicity override is itself a statement
+    /// about call structure — `bind_task_ids` makes exactly one atomic store
+    /// call and never reads first — so asserting call structure tests it
+    /// directly instead of through a proxy. The concurrency tests can only
+    /// catch a regression probabilistically; this catches it every time.
+    struct CallRecordingStore {
+        inner: InMemoryEntryStore,
+        calls: std::sync::Mutex<Vec<&'static str>>,
+    }
+
+    impl CallRecordingStore {
+        fn new() -> Self {
+            Self {
+                inner: InMemoryEntryStore::new(),
+                calls: std::sync::Mutex::new(Vec::new()),
+            }
+        }
+
+        /// Never holds the guard across an await — `await_holding_lock` is
+        /// denied workspace-wide, and a std Mutex held across a yield point
+        /// would deadlock the multi-thread tests. Poisoning is recovered from
+        /// rather than panicked on, so a failing assertion elsewhere cannot
+        /// cascade into a confusing second panic here.
+        fn record(&self, method: &'static str) {
+            let mut calls = self.calls.lock().unwrap_or_else(|e| e.into_inner());
+            calls.push(method);
+        }
+
+        fn calls(&self) -> Vec<&'static str> {
+            self.calls.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        }
+
+        fn count(&self, method: &str) -> usize {
+            self.calls().iter().filter(|m| **m == method).count()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl SessionEntryStore for CallRecordingStore {
+        async fn save(&self, entry: SessionEntry) -> Result<()> {
+            self.record("save");
+            self.inner.save(entry).await
+        }
+
+        async fn get_entries(&self, session_id: &str) -> Result<Vec<SessionEntry>> {
+            self.record("get_entries");
+            self.inner.get_entries(session_id).await
+        }
+
+        async fn get_after(&self, session_id: &str, after: i64) -> Result<Vec<SessionEntry>> {
+            self.record("get_after");
+            self.inner.get_after(session_id, after).await
+        }
+
+        async fn find_latest_checkpoint(&self, session_id: &str) -> Result<Option<SessionEntry>> {
+            self.record("find_latest_checkpoint");
+            self.inner.find_latest_checkpoint(session_id).await
+        }
+
+        async fn delete_session(&self, session_id: &str) -> Result<()> {
+            self.record("delete_session");
+            self.inner.delete_session(session_id).await
+        }
+
+        async fn get_count(&self, session_id: &str) -> Result<usize> {
+            self.record("get_count");
+            self.inner.get_count(session_id).await
+        }
+
+        async fn get_session_metadata(
+            &self,
+            session_id: &str,
+        ) -> Result<serde_json::Map<String, serde_json::Value>> {
+            self.record("get_session_metadata");
+            self.inner.get_session_metadata(session_id).await
+        }
+
+        async fn merge_session_metadata(
+            &self,
+            session_id: &str,
+            patch: serde_json::Map<String, serde_json::Value>,
+        ) -> Result<()> {
+            self.record("merge_session_metadata");
+            self.inner.merge_session_metadata(session_id, patch).await
+        }
+
+        async fn append_session_metadata_values(
+            &self,
+            session_id: &str,
+            key: &str,
+            values: &[String],
+        ) -> Result<()> {
+            self.record("append_session_metadata_values");
+            self.inner
+                .append_session_metadata_values(session_id, key, values)
+                .await
+        }
+    }
+
+    #[tokio::test]
+    async fn test_bind_task_ids_makes_exactly_one_atomic_store_call() {
+        // THE deterministic guard on the atomicity override. bind_task_ids must
+        // delegate to the store's atomic append and to nothing else, because
+        // only the store can hold its own lock or transaction across the
+        // read-modify-write. A get-then-union-then-merge implementation shows up
+        // here as a get_session_metadata + merge_session_metadata pair and fails
+        // on every run, where the concurrency tests would only catch it most of
+        // the time.
+        let store = Arc::new(CallRecordingStore::new());
+        let session = Session::with_id("s1".to_string(), store.clone());
+
+        session
+            .bind_task_ids(&["1".into(), "2".into()])
+            .await
+            .expect("bind");
+
+        assert_eq!(
+            store.calls(),
+            vec!["append_session_metadata_values"],
+            "bind_task_ids must make exactly one atomic store call"
+        );
+        assert_eq!(
+            store.count("get_session_metadata"),
+            0,
+            "bind_task_ids must not read the metadata first — that read releases \
+             the backend's lock before the write takes it"
+        );
+        assert_eq!(
+            store.count("merge_session_metadata"),
+            0,
+            "bind_task_ids must not write through the non-atomic merge path"
+        );
+
+        // And the binding really did land, so the assertions above are about a
+        // working call, not an inert one.
+        assert_eq!(session.task_ids().await.expect("read"), vec!["1", "2"]);
+    }
+
+    #[tokio::test]
+    async fn test_repeated_binds_each_make_exactly_one_atomic_store_call() {
+        // The union across calls must also happen store-side: two binds are two
+        // appends, never an append plus a read-modify-write.
+        let store = Arc::new(CallRecordingStore::new());
+        let session = Session::with_id("s1".to_string(), store.clone());
+
+        session.bind_task_ids(&["1".into()]).await.expect("first");
+        session.bind_task_ids(&["2".into()]).await.expect("second");
+
+        assert_eq!(
+            store.calls(),
+            vec![
+                "append_session_metadata_values",
+                "append_session_metadata_values"
+            ],
+            "each bind is one atomic call and nothing else"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_bind_of_nothing_still_routes_through_the_atomic_call() {
+        // The empty-slice no-op belongs to the store, not to Session: keeping
+        // the decision store-side is what lets the store define "no read, no
+        // write, no ownership check" for it. Session must not short-circuit with
+        // a read of its own.
+        let store = Arc::new(CallRecordingStore::new());
+        let session = Session::with_id("s1".to_string(), store.clone());
+
+        session.bind_task_ids(&[]).await.expect("bind");
+
+        assert_eq!(store.calls(), vec!["append_session_metadata_values"]);
+        assert_eq!(store.count("get_session_metadata"), 0);
+    }
+
+    #[tokio::test]
+    async fn test_task_ids_reads_once_and_writes_nothing() {
+        // The read path is a pure read: no write call may sneak in, or reading a
+        // binding would create or mutate one.
+        let store = Arc::new(CallRecordingStore::new());
+        let session = Session::with_id("s1".to_string(), store.clone());
+
+        session.task_ids().await.expect("read");
+
+        assert_eq!(store.calls(), vec!["get_session_metadata"]);
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn test_concurrent_binds_never_lose_an_id() {
         // 32 tasks, each binding a distinct id, all released together so their
@@ -617,8 +810,9 @@ mod tests {
         //
         // Not a deterministic reproducer — an uncontended tokio RwLock acquire
         // completes without yielding, so a get-then-merge implementation is not
-        // *guaranteed* to interleave here. `test_read_then_merge_loses_a_concurrent_bind`
-        // is the deterministic pin; this is the end-to-end guard.
+        // *guaranteed* to interleave here. This is the end-to-end guard;
+        // test_bind_task_ids_makes_exactly_one_atomic_store_call is the
+        // deterministic one.
         const WRITERS: usize = 32;
         let session = Session::new(Arc::new(InMemoryEntryStore::new()));
         let barrier = Arc::new(tokio::sync::Barrier::new(WRITERS));
