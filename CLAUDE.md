@@ -99,11 +99,23 @@ just audit
 
 #### Test-running gotchas (learned the hard way)
 
-- **Compilation dominates.** `vol-agent-server` test binaries take **~9 minutes** to compile cold; the 199 tests then run in **2.5 seconds**. A "hanging" test run is almost always still compiling. Compile first with `cargo nextest run -p <crate> --no-run` to see progress, then run.
+- **Compilation dominates.** `vol-agent-server` test binaries take **~5 minutes** to compile cold; the 199 tests then run in **2.5 seconds**. A "hanging" test run is almost always still compiling. Compile first with `cargo nextest run -p <crate> --no-run` to see progress, then run.
+- **`[profile.dev] debug = 1` is load-bearing on small machines — do not raise it back to `true`.** With full debug info, `.debug*` sections were 360 MB of a 463 MB `vol-agent-server` test binary, and cargo links `-j nproc` of those at once. On an 8 GB box that exhausts swap and turns a link into a 45-minute thrash or an OOM kill. Measured after: binary 463 MB → 125 MB, cold lib-test build 50 min-then-OOM → **5m15s at 1.06 GB peak RSS, zero swaps**. `debug = 1` keeps line tables, so panics and test failures still report `file:line`.
+- **Scope test runs to a crate; never run `--workspace` test builds on a small box.** `cargo nextest run --workspace` builds a test harness for every crate. Use `-p <crate>`.
+- **If the tests you want live in `src/`, add `--lib`** — it skips `vol-agent-server`'s 9 integration test binaries entirely, which is most of the link cost.
+- **Agent-run commands have a 10-minute cap.** Anything that might exceed it must be backgrounded to a log and polled, never retried — a retried 45-minute command makes no progress forever.
 - **`just test-*` recipes redirect stderr to `/dev/null`** (for the nextest→cargo fallback), which also swallows all nextest progress output. When you need to watch progress, call `cargo nextest run` directly — but only for diagnosis, not as the normal path.
 - **The nextest `default` profile has no `slow-timeout`** — tests can hang forever. Only `--profile slow` (`just test-slow`) has `terminate-after = 5`. Use it when you suspect a hang.
 - **`vol-agent-server` integration tests need `--features vol-agent-server/test-utils`** — `just test-integration` passes this already; `just test-crate` does not.
+- **Switching command shapes costs a full rebuild.** Different feature sets, and `cargo clippy` vs `cargo build`, produce different fingerprints and do not share artifacts. Pick one shape per work session instead of alternating.
 - Never `pkill -f "cargo test"` while other cargo work is in flight — it kills background test tasks too.
+
+#### Known gate gaps (verified 2026-09-02, unfixed)
+
+- **`justfile:154` `cover-gate` reads the wrong column.** `awk '{print $4}'` takes llvm-cov's **region** coverage, while the recipe's own output calls it "line coverage". Every `cover-gate` number reported so far is mislabeled.
+- **`indexing_slicing = "deny"` has never run.** Neither `just clippy` nor `just clippy-strict` passes `--all-targets`, so `#[cfg(test)]` modules are never linted. There are already 58 violations in `vol-llm-agent-protocol/tests/jsonrpc_integration.rs`.
+- **`vol-llm-ui`'s `web` feature does not compile.** 6 pre-existing `E0063 ConversationEntry::tool_call_id` errors in `conversation.rs` / `sessions_panel.rs`. CI never catches it: the crate's default feature is `tui` and the web module is gated `not(feature = "tui")`, so `cargo check --workspace` skips it entirely.
+
 
 ### Web Dev
 

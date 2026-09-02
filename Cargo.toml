@@ -182,6 +182,17 @@ indexing_slicing = "deny"
 
 [profile]
 
+# Debug info was 78% of every test binary (360 MB of 463 MB for
+# vol-agent-server), and cargo links -j nproc of them at once. On an 8 GB box
+# that exhausts swap and turns a link into a 45-minute thrash or an OOM kill.
+# `debug = 1` keeps line tables, so panics and test failures still report
+# file:line, but drops .debug_info/.debug_str. `split-debuginfo = "unpacked"`
+# leaves what remains in the .o files instead of copying it into every binary.
+# `profile.test` inherits from `dev`, so this covers test binaries too.
+[profile.dev]
+debug = 1
+split-debuginfo = "unpacked"
+
 [profile.wasm-dev]
 inherits = "dev"
 opt-level = "s"
