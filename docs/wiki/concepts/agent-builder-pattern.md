@@ -44,7 +44,7 @@ The builder accumulates state (LLM, tools, plugins, config) and validates on `bu
 | `with_tool()` | Register a tool | Empty |
 | `with_plugin()` | Register a plugin | Empty |
 | `with_agent_id()` | Set agent identifier | Auto-generated |
-| `with_max_iterations()` | Set max ReAct cycles | 5 |
+| `with_max_iterations()` | Set max ReAct cycles | 999 (main) / 499 (sub-agent) |
 | `with_system_prompt()` | Custom system prompt | Default crypto prompt |
 | `with_mcp_from_config()` | Auto-discover and connect MCP servers | No MCP (continues without) |
 | `with_verbose()` | Enable debug logging | false |

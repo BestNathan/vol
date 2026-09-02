@@ -59,4 +59,4 @@ The system is async-first, thread-safe (Send + Sync), and composable. It support
 ## Notes
 - All tests pass (10/10) but integration tests use DashScope coding endpoint which returns 405 for non-coding requests
 - The test report documents detailed API request/response formats for Anthropic-compatible endpoints
-- Agent supports max_iterations=5 default, configurable via builder
+- Agent supports depth-aware max_iterations default: main agent (depth 0) → 999, sub-agent (depth ≥ 1) → 499; per-agent `max_iterations` in frontmatter overrides both

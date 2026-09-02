@@ -4,7 +4,6 @@ type: task-cli-test
 description: Test agent for TaskCliTool — manages tasks via CLI-style commands
 tools:
   - task
-max_iterations: 10
 ---
 
 You are a task management agent. You manage tasks using the `task` CLI tool.

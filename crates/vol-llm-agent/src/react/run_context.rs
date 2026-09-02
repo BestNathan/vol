@@ -185,13 +185,19 @@ impl RunContext {
         self.iteration.store(0, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// Get max iterations from AgentDef, defaulting to 5.
+    /// Get max iterations for this run.
+    ///
+    /// Resolution order:
+    /// 1. Explicit per-agent `max_iterations` in frontmatter (wins unconditionally).
+    /// 2. Depth-based default: main agent (`depth == 0`) → 999, sub-agent (`depth ≥ 1`) → 499.
     pub fn max_iterations(&self) -> u32 {
-        self.config
-            .def
-            .as_ref()
-            .and_then(|d| d.max_iterations)
-            .unwrap_or(5)
+        if let Some(v) = self.config.def.as_ref().and_then(|d| d.max_iterations) {
+            return v;
+        }
+        match self.config.def.as_ref().map(|d| d.depth).unwrap_or(0) {
+            0 => 999,
+            _ => 499,
+        }
     }
 
     /// Get max history messages from AgentDef, defaulting to 20.
@@ -481,6 +487,7 @@ impl Clone for RunContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::AgentDef;
     use vol_llm_context::{AttentionAnchor, ContextBuilderBuilder};
     use vol_llm_core::{MessageContent, MessageRole};
     use vol_session::{InMemoryEntryStore, SessionMessage};
@@ -934,5 +941,38 @@ mod tests {
         assert_eq!(ctx.current_iteration(), 2);
         ctx.reset_iteration();
         assert_eq!(ctx.current_iteration(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_max_iterations_default_main_agent() {
+        // No def set → depth defaults to 0 → main agent default of 999.
+        let ctx = create_test_context();
+        assert_eq!(ctx.max_iterations(), 999);
+    }
+
+    #[tokio::test]
+    async fn test_max_iterations_default_sub_agent() {
+        // Sub-agent (depth ≥ 1) with no explicit max_iterations → 499.
+        let def = AgentDef::new("sub", "prompt").with_depth(1);
+        let config = Arc::new(AgentConfig {
+            def: Some(def),
+            ..Default::default()
+        });
+        let (ctx, _rx) = RunContext::new("test-run".to_string(), "input".to_string(), config);
+        assert_eq!(ctx.max_iterations(), 499);
+    }
+
+    #[tokio::test]
+    async fn test_max_iterations_explicit_override_wins() {
+        // Explicit per-agent max_iterations wins regardless of depth.
+        let def = AgentDef::new("main", "prompt")
+            .with_depth(0)
+            .with_max_iterations(42);
+        let config = Arc::new(AgentConfig {
+            def: Some(def),
+            ..Default::default()
+        });
+        let (ctx, _rx) = RunContext::new("test-run".to_string(), "input".to_string(), config);
+        assert_eq!(ctx.max_iterations(), 42);
     }
 }
