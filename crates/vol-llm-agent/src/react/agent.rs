@@ -500,6 +500,7 @@ impl ReActAgent {
                 tracing::warn!(
                     run_id = %run_ctx.run_id,
                     session_id = %run_ctx.session_id,
+                    task_ids = ?ids,
                     error = %e,
                     "failed to bind task ids to session"
                 );
