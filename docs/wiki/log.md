@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-09-02] ingest | TaskId Representation Unification + Session-Task Binding
+- Created sources: [[taskid-unification-session-task-binding]]
+- Created concepts: [[session-task-binding]], [[lenient-serde-zero-migration]]
+- Updated concepts: none new (added entries to existing concept pages)
+- Updated entities: [[vol-session]] (added `SessionEntryStore` metadata methods + `Session::bind_task_ids` + `SessionInfo.metadata` + 2026-09-02 timeline), [[vol-llm-task-crate]] (TaskId serde/Display/FromStr rewritten with lenient Deserialize), [[vol-llm-agent-crate]] (added `AgentInput.task_ids`, `run_input` bind, `RunContext.task_ids`, `vol-llm-task` dependency), [[vol-llm-agent-protocol-crate]] (added `TaskPayload::Get { task_id: TaskId }`, `vol-llm-task` dependency, 2026-09-02 timeline)
+- Updated index: entity summaries for 4 crates; added 2 new concept rows
+- Cross-references added: [[session-task-binding]] ↔ [[vol-session]], [[vol-llm-agent-crate]], [[lenient-serde-zero-migration]]; [[lenient-serde-zero-migration]] ↔ [[vol-llm-task-crate]], [[vol-session]]
+- Changes: 22 commits on branch `feat/taskid-unification-session-binding` (merge-base 1781873c). TaskId now serializes as canonical decimal string `"1"` with lenient deserialization accepting legacy numeric ids and single-`t`-prefixed strings (zero migration). Sessions bind to task ids via a generic metadata mechanism — in-memory HashMap, database reuses the dead `sessions.metadata` column (zero migration), file sidecar. `Session::bind_task_ids` is atomic at the store level; the file backend's per-instance mutex is documented as not covering cross-instance merges via `FileSessionManager`. Build profile repaired mid-run: `[profile.dev] debug = 1` + `split-debuginfo = "unpacked"` dropped test binaries from 463 MB to 125 MB and `vol-agent-server` cold-link from OOM-after-50-min to 5m15s. CLAUDE.md updated with corrected timings and three verified gate gaps (cover-gate column, indexing_slicing never running on test code, vol-llm-ui web feature not compiling in CI). Final whole-branch review (opus) triaged 20 deferred-minors as all safe-to-defer; zero blocking issues
+
 ## [2026-08-30] ingest | SSH Idle-Task Lifecycle + Lazy Profile Loading
 - Created sources: [[sandbox-ssh-idle-task-lifecycle]]
 - Updated concepts: [[sandbox-lifecycle]] (new "Dropping an instance releases it" section; retracted the preload Known gap; durability no longer references preload), [[sandbox-architecture]] (preload row removed from the resolution table; startup wiring now notes that cli_tool::load_dir still acquires referenced profiles at startup)

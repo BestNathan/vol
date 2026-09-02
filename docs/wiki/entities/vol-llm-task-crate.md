@@ -1,10 +1,10 @@
 ---
 type: entity
 category: service
-tags: [task-store, persistence, seaorm, sqlite, postgres]
+tags: [task-store, persistence, seaorm, sqlite, postgres, task-id]
 created: 2026-06-09
-updated: 2026-08-16
-source_count: 6
+updated: 2026-09-02
+source_count: 7
 ---
 
 # vol-llm-task Crate
@@ -18,6 +18,9 @@ source_count: 6
 - `stores::database::DatabaseTaskStore` uses SeaORM and supports SQLite and Postgres connections; MySQL is recognized but not enabled.
 - Schema migrations use SeaORM Rust `MigratorTrait` and are compiled into the binary at runtime.
 - Database CRUD and ready-task behavior are verified with tests for create/get/update/delete/list, dependency readiness, and persistence across reconnect.
+- `TaskId(pub u64)` has hand-written `Serialize`/`Deserialize`/`Display`/`FromStr` [[taskid-unification-session-task-binding]]. Canonical serialized form is the decimal string `"1"`; `Display` emits bare digits (no `t` prefix); `FromStr` strips one `t`. Deserialization is **lenient** — accepts bare integers (legacy data), canonical strings, and single-`t`-prefixed strings (historical tool output) — so old rows in both stores keep loading without a migration [[lenient-serde-zero-migration]].
+- `TaskId` is re-exported as `vol_llm_task::TaskId`; `ParseTaskIdError` is the `FromStr::Err` type. `vol-llm-agent` and `vol-llm-agent-protocol` both depend on `vol-llm-task`.
+- The CLI parser uses `parse_task_id_arg` (in `cli/parser.rs`) which routes through `TaskId::from_str`, so `--id 1`, `--id t1`, and `--id "1"` all work.
 
 ## SQLite Database Store
 Sources: [[seaorm-task-database-store-implementation]], [[seaorm-sqlite-url-normalization-fix]]
