@@ -20,11 +20,13 @@ if [ "$NO_CHANGES" = "true" ]; then
   exit 0
 fi
 
-# `just` is only needed when a gate actually runs — docs-only commits
-# must not require it.
-if ! command -v just >/dev/null 2>&1; then
-  echo "pre-commit requires 'just' (https://just.systems) — install it first."
-  exit 1
+# `just` is only needed when a Rust/frontend gate actually runs — docs-only
+# and wiki-only commits must not require it.
+if [ "$RUST_CHANGED" = "true" ] || [ "$FRONTEND_CHANGED" = "true" ]; then
+  if ! command -v just >/dev/null 2>&1; then
+    echo "pre-commit requires 'just' (https://just.systems) — install it first."
+    exit 1
+  fi
 fi
 
 HAS_ERROR=0
@@ -56,6 +58,16 @@ if [ "$FRONTEND_CHANGED" = "true" ]; then
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 
   just fe-type || HAS_ERROR=1
+  if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
+fi
+
+# ── Wiki link validation ──────────────────────────────────────────────
+# Catches broken [[wiki-links]] and dangling markdown links before they
+# reach CI. Output is AI-actionable: each broken link comes with the
+# closest matching slug so the commit author (human or agent) can fix
+# without re-discovering the right target.
+if [ "$WIKI_CHANGED" = "true" ]; then
+  "$SCRIPT_DIR/scripts/check-wiki-links.sh" || HAS_ERROR=1
   if [ $HAS_ERROR -eq 1 ]; then exit 1; fi
 fi
 

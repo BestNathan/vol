@@ -46,6 +46,7 @@ scripts/                  # Build / deploy helpers
 - **`vol-llm-agent-protocol` must not depend on `vol-agent-server`** (verify: `./scripts/check-agent-boundaries.sh`).
 - **`vol-llm-runtime` must not depend on `vol-agent-server`**.
 - **No plaintext Kubernetes Secrets in git** — commit `kind: SealedSecret` (encrypted via sealed-secrets) only. Use `scripts/seal-secret.sh` to encrypt (auto-downloads the right kubeseal version from the cluster). Plain `kind: Secret` is blocked by `scripts/check-no-plaintext-secrets.sh` (pre-commit + CI). Documentation placeholders are OK only if named `*.example.yaml` / `*.template.yaml`.
+- **Wiki `[[slug]]` links must resolve** — the slug must match a `.md` filename (without extension) under `docs/wiki/{concepts,entities,sources,analyses}/`. Enforced by `scripts/check-wiki-links.sh` in pre-commit (on any `docs/wiki/` change) and by `mkdocs build --strict` in CI. The pre-commit error output names the closest matching slug so the fix is one edit.
 - **JSON-RPC params/results are flat** — `ControlPayload` must not use `#[serde(tag/ content=...)]`.
 - **Route collision**: `control_plane.client_ws_path` must ≠ `node_ws_path` and ≠ `/health` (config validation rejects).
 - **Combined mode** (`control_plane=true, data_plane=true`): `/ws` goes to control-plane; local data-plane registers in-process.

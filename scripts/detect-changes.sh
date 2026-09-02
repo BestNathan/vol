@@ -12,6 +12,7 @@ FILES=$(cat)
 RUST_CHANGED=false
 FRONTEND_CHANGED=false
 DEPLOY_CHANGED=false
+WIKI_CHANGED=false
 
 if echo "$FILES" | grep -q '\.rs$'; then
   RUST_CHANGED=true
@@ -36,13 +37,21 @@ if echo "$FILES" | grep -q '^deploy/\|^k8s/'; then
   DEPLOY_CHANGED=true
 fi
 
+# docs/wiki/ changes trigger wiki-link validation in pre-commit.
+if echo "$FILES" | grep -q '^docs/wiki/'; then
+  WIKI_CHANGED=true
+fi
+
 echo "RUST_CHANGED=$RUST_CHANGED"
 echo "FRONTEND_CHANGED=$FRONTEND_CHANGED"
 echo "DEPLOY_CHANGED=$DEPLOY_CHANGED"
+echo "WIKI_CHANGED=$WIKI_CHANGED"
 
 # Use with eval: eval "$(git diff ... | ./scripts/detect-changes.sh)"
-# Sets RUST_CHANGED, FRONTEND_CHANGED, DEPLOY_CHANGED, NO_CHANGES. Always exits 0.
-if [ "$RUST_CHANGED" = "false" ] && [ "$FRONTEND_CHANGED" = "false" ] && [ "$DEPLOY_CHANGED" = "false" ]; then
+# Sets RUST_CHANGED, FRONTEND_CHANGED, DEPLOY_CHANGED, WIKI_CHANGED, NO_CHANGES.
+# Always exits 0.
+if [ "$RUST_CHANGED" = "false" ] && [ "$FRONTEND_CHANGED" = "false" ] && \
+   [ "$DEPLOY_CHANGED" = "false" ] && [ "$WIKI_CHANGED" = "false" ]; then
   echo "NO_CHANGES=true"
 else
   echo "NO_CHANGES=false"

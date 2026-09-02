@@ -102,7 +102,7 @@ Added a new "Sandboxes" tab to the React web frontend (between MCP and Logs) to 
 
 ## Concepts Covered
 - [[sandbox-lifecycle]]: Registry now fully exposed to frontend via sandbox.list
-- [[jsonrpc-websocket]]: sandbox.list method added to frontend RPC client
+- [[json-rpc-websocket]]: sandbox.list method added to frontend RPC client
 - [[react-pattern]]: SandboxesPanel follows same pattern as McpPanel (loading/error/empty states, responsive layout)
 
 ## Notes
