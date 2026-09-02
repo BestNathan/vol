@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 pub struct FileSessionEntryStore {
     entry_dir: PathBuf,
     agent_type: Option<String>,
+    /// Serializes read-modify-write cycles on the metadata sidecar.
+    meta_write_lock: tokio::sync::Mutex<()>,
 }
 
 /// JSONL line format for SessionEntry.
@@ -34,6 +36,7 @@ impl FileSessionEntryStore {
         Self {
             entry_dir: entry_dir.as_ref().to_path_buf(),
             agent_type: None,
+            meta_write_lock: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -45,6 +48,7 @@ impl FileSessionEntryStore {
         Self {
             entry_dir: entry_dir.as_ref().to_path_buf(),
             agent_type,
+            meta_write_lock: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -53,24 +57,43 @@ impl FileSessionEntryStore {
         &self.entry_dir
     }
 
-    /// Resolve file path for a session.
-    /// Includes agent_type subdirectory when configured.
-    fn file_path(&self, session_id: &str) -> PathBuf {
+    /// Resolve the directory holding this store's session files.
+    /// Includes the agent_type subdirectory when configured.
+    fn session_dir(&self) -> PathBuf {
         match &self.agent_type {
-            Some(agent) => self
-                .entry_dir
-                .join(agent)
-                .join(format!("{session_id}.jsonl")),
-            None => self.entry_dir.join(format!("{session_id}.jsonl")),
+            Some(agent) => self.entry_dir.join(agent),
+            None => self.entry_dir.clone(),
         }
     }
 
+    /// Resolve file path for a session.
+    /// Includes agent_type subdirectory when configured.
+    fn file_path(&self, session_id: &str) -> PathBuf {
+        self.session_dir().join(format!("{session_id}.jsonl"))
+    }
+
+    /// Resolve the metadata sidecar path for a session.
+    ///
+    /// Shares [`Self::session_dir`] with [`Self::file_path`] so the
+    /// path-traversal hardening applied to `agent_id` covers sidecars too.
+    /// Do not rebuild this path independently.
+    ///
+    /// The file name is built by concatenation rather than
+    /// `Path::with_extension`, which would eat the trailing segment of a
+    /// `session_id` containing a dot (`a.b` → `a.meta.json`).
+    fn meta_path(&self, session_id: &str) -> PathBuf {
+        self.session_dir().join(format!("{session_id}.meta.json"))
+    }
+
+    /// Temp path for the atomic sidecar replacement, alongside the sidecar so
+    /// the rename never crosses a filesystem boundary.
+    fn meta_tmp_path(&self, session_id: &str) -> PathBuf {
+        self.session_dir()
+            .join(format!("{session_id}.meta.json.tmp"))
+    }
+
     fn ensure_dir(&self) -> std::io::Result<()> {
-        let dir = match &self.agent_type {
-            Some(agent) => self.entry_dir.join(agent),
-            None => self.entry_dir.clone(),
-        };
-        fs::create_dir_all(&dir)
+        fs::create_dir_all(self.session_dir())
     }
 
     fn append_line(&self, session_id: &str, line: &str) -> std::io::Result<()> {
@@ -207,10 +230,7 @@ impl FileSessionEntryStore {
     /// Scan `{entry_dir}/{agent_type}/*.jsonl` and return session summaries.
     pub fn list_sessions(&self) -> std::io::Result<Vec<SessionSummary>> {
         let mut summaries = Vec::new();
-        let scan_dir: PathBuf = match &self.agent_type {
-            Some(agent) => self.entry_dir.join(agent),
-            None => self.entry_dir.clone(),
-        };
+        let scan_dir = self.session_dir();
         let dir = match std::fs::read_dir(&scan_dir) {
             Ok(d) => d,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(summaries),
@@ -347,6 +367,13 @@ impl SessionEntryStore for FileSessionEntryStore {
         if file_path.exists() {
             fs::remove_file(&file_path).map_err(StoreError::Io)?;
         }
+        // Drop the sidecar too, or metadata resurrects onto a later session
+        // that reuses this id.
+        match fs::remove_file(self.meta_path(session_id)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(StoreError::Io(e)),
+        }
         Ok(())
     }
 
@@ -372,21 +399,43 @@ impl SessionEntryStore for FileSessionEntryStore {
 
     async fn get_session_metadata(
         &self,
-        _session_id: &str,
+        session_id: &str,
     ) -> Result<serde_json::Map<String, serde_json::Value>> {
-        Err(StoreError::Internal(
-            "session metadata not yet implemented for the file backend".to_string(),
-        ))
+        let path = self.meta_path(session_id);
+        match std::fs::read_to_string(&path) {
+            // A malformed sidecar degrades to empty rather than making the
+            // session unreadable.
+            Ok(raw) => Ok(serde_json::from_str(&raw).unwrap_or_default()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(serde_json::Map::new()),
+            Err(e) => Err(StoreError::Io(e)),
+        }
     }
 
     async fn merge_session_metadata(
         &self,
-        _session_id: &str,
-        _patch: serde_json::Map<String, serde_json::Value>,
+        session_id: &str,
+        patch: serde_json::Map<String, serde_json::Value>,
     ) -> Result<()> {
-        Err(StoreError::Internal(
-            "session metadata not yet implemented for the file backend".to_string(),
-        ))
+        // The mutex covers in-process concurrency only; sessions are
+        // single-writer in practice.
+        let _guard = self.meta_write_lock.lock().await;
+
+        let mut merged = self.get_session_metadata(session_id).await?;
+        for (k, v) in patch {
+            merged.insert(k, v);
+        }
+
+        self.ensure_dir()?;
+        let path = self.meta_path(session_id);
+        let tmp = self.meta_tmp_path(session_id);
+        let encoded =
+            serde_json::to_string(&merged).map_err(|e| StoreError::Serialization(e.to_string()))?;
+
+        // Temp file plus rename: a crash mid-write cannot leave a half-written
+        // sidecar behind.
+        std::fs::write(&tmp, encoded)?;
+        std::fs::rename(&tmp, &path)?;
+        Ok(())
     }
 }
 
@@ -691,18 +740,213 @@ mod entry_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
+    use crate::message::SessionMessage;
+    use vol_llm_core::Message;
+
+    fn sample_entry(session_id: &str) -> SessionEntry {
+        SessionEntry::from_message(SessionMessage::new(
+            session_id.to_string(),
+            Message::user("hello"),
+        ))
+    }
+
+    #[test]
+    fn test_meta_path_shape() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+        assert_eq!(
+            store.meta_path("s1"),
+            dir.path().join("agent-a").join("s1.meta.json")
+        );
+        assert_eq!(
+            store.meta_path("a.b"),
+            dir.path().join("agent-a").join("a.b.meta.json")
+        );
+    }
 
     #[tokio::test]
-    async fn test_metadata_not_yet_implemented() {
-        // Replaced with real behaviour in a later task. This test exists so
-        // an unimplemented backend fails loudly rather than silently.
-        let temp_dir = tempdir().unwrap();
-        let store = FileSessionEntryStore::new(temp_dir.path());
-        assert!(store.get_session_metadata("s1").await.is_err());
-        assert!(store
-            .merge_session_metadata("s1", serde_json::Map::new())
+    async fn test_file_metadata_round_trip() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+
+        let mut patch = serde_json::Map::new();
+        patch.insert("task_ids".into(), serde_json::json!(["1", "2"]));
+        store
+            .merge_session_metadata("s1", patch)
             .await
-            .is_err());
+            .expect("merge");
+
+        let meta = store.get_session_metadata("s1").await.expect("get");
+        assert_eq!(meta["task_ids"], serde_json::json!(["1", "2"]));
+    }
+
+    #[tokio::test]
+    async fn test_file_metadata_merge_is_shallow() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+
+        let mut first = serde_json::Map::new();
+        first.insert("a".into(), serde_json::json!(1));
+        first.insert("task_ids".into(), serde_json::json!(["1"]));
+        store
+            .merge_session_metadata("s1", first)
+            .await
+            .expect("first");
+
+        let mut second = serde_json::Map::new();
+        second.insert("task_ids".into(), serde_json::json!(["1", "2"]));
+        store
+            .merge_session_metadata("s1", second)
+            .await
+            .expect("second");
+
+        let meta = store.get_session_metadata("s1").await.expect("get");
+        assert_eq!(meta["a"], serde_json::json!(1));
+        assert_eq!(meta["task_ids"], serde_json::json!(["1", "2"]));
+    }
+
+    #[tokio::test]
+    async fn test_file_metadata_upserts_with_no_jsonl_present() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+
+        let mut patch = serde_json::Map::new();
+        patch.insert("k".into(), serde_json::json!("v"));
+        store
+            .merge_session_metadata("fresh", patch)
+            .await
+            .expect("merge");
+
+        assert_eq!(
+            store.get_session_metadata("fresh").await.expect("get")["k"],
+            serde_json::json!("v")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_file_metadata_unknown_session_is_empty() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+        assert!(store
+            .get_session_metadata("nope")
+            .await
+            .expect("get")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_file_metadata_malformed_sidecar_degrades_to_empty() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+        let agent_dir = dir.path().join("agent-a");
+        std::fs::create_dir_all(&agent_dir).expect("mkdir");
+        std::fs::write(agent_dir.join("s1.meta.json"), "{ truncated").expect("write");
+
+        assert!(store
+            .get_session_metadata("s1")
+            .await
+            .expect("get")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_file_metadata_without_agent_type() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::new(dir.path());
+
+        let mut patch = serde_json::Map::new();
+        patch.insert("k".into(), serde_json::json!("v"));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("merge");
+
+        assert!(dir.path().join("s1.meta.json").exists());
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["k"],
+            serde_json::json!("v")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_list_sessions_ignores_sidecar_files() {
+        // Regression guard: list_sessions filters on the "jsonl" extension
+        // (file_store.rs:225-227). A sidecar must never appear as a session
+        // named "s1.meta".
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+
+        store.save(sample_entry("s1")).await.expect("save");
+        let mut patch = serde_json::Map::new();
+        patch.insert("k".into(), serde_json::json!("v"));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("merge");
+
+        let sessions = store.list_sessions().expect("list");
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].session_id, "s1");
+    }
+
+    #[tokio::test]
+    async fn test_delete_session_removes_sidecar() {
+        // Otherwise metadata resurrects onto a later session reusing the id.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+
+        store.save(sample_entry("s1")).await.expect("save");
+        let mut patch = serde_json::Map::new();
+        patch.insert("k".into(), serde_json::json!("v"));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("merge");
+
+        store.delete_session("s1").await.expect("delete");
+
+        assert!(store
+            .get_session_metadata("s1")
+            .await
+            .expect("get")
+            .is_empty());
+        assert!(!dir.path().join("agent-a").join("s1.meta.json").exists());
+    }
+
+    #[tokio::test]
+    async fn test_delete_session_without_sidecar_is_ok() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+
+        store.save(sample_entry("s1")).await.expect("save");
+        store.delete_session("s1").await.expect("delete");
+        store.delete_session("never-existed").await.expect("delete");
     }
 }
