@@ -19,8 +19,6 @@ data:
 
     tools: [read_file, glob, grep, bash]
 
-    max_iterations: 40
-
     ---
 
 
