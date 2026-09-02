@@ -10,7 +10,7 @@ source_count: 1
 # Lenient Serde for Zero-Migration Type Changes
 
 **Category:** Backward-compatible serialization pattern
-**Related:** [[vol-llm-task]], [[session-as-ssot]], [[vol-session]]
+**Related:** [[vol-llm-task-crate]], [[session-as-ssot]], [[vol-session]]
 
 ## Definition
 
@@ -93,5 +93,5 @@ keep loading. The zero-migration claim is guarded by `test_file_store_reads_lega
 ## Related Concepts
 
 - [[session-task-binding]]: consumes `TaskId` and relies on the lenient `Deserialize` for any persisted bindings written before the type change
-- [[vol-llm-task]]: the crate that owns `TaskId`
+- [[vol-llm-task-crate]]: the crate that owns `TaskId`
 - [[vol-session]]: uses the same pattern for session metadata (degrades malformed JSON to empty via `unwrap_or_default`)

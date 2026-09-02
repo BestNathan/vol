@@ -11,7 +11,7 @@ tags: [task-id, session, binding, serde, zero-migration, atomicity]
 **Authors/Creators:** Claude Code (subagent-driven development)
 **Date:** 2026-09-02
 **Branch:** `feat/taskid-unification-session-binding`
-**Specs:** [[taskid-representation-unification-design]], [[session-task-binding-design]]
+**Specs:** [taskid-representation-unification-design](https://github.com/BestNathan/vol/blob/main/docs/superpowers/specs/2026-09-02-taskid-representation-unification-design.md), [session-task-binding-design](https://github.com/BestNathan/vol/blob/main/docs/superpowers/specs/2026-09-02-session-task-binding-design.md)
 
 ## TL;DR
 
@@ -96,10 +96,10 @@ CLAUDE.md was updated with corrected timings, scoping rules (`-p <crate>`, `--li
 ## Entities Mentioned
 
 - [[vol-session]]: gained three new trait methods + three backends + `Session::bind_task_ids` + `SessionInfo.metadata`
-- [[vol-llm-task]]: `TaskId` serde/Display/FromStr rewritten
-- [[vol-llm-agent]]: `AgentInput.task_ids` field, `run_input` bind call, `RunContext.task_ids` field
-- [[vol-llm-agent-protocol]]: `TaskPayload::Get { task_id: TaskId }` (was `u64`); added `vol-llm-task` dependency (no cycle)
-- [[vol-agent-server]]: task handler emits string ids; session handler emits `metadata`
+- [[vol-llm-task-crate]]: `TaskId` serde/Display/FromStr rewritten
+- [[vol-llm-agent-crate]]: `AgentInput.task_ids` field, `run_input` bind call, `RunContext.task_ids` field
+- [[vol-llm-agent-protocol-crate]]: `TaskPayload::Get { task_id: TaskId }` (was `u64`); added `vol-llm-task` dependency (no cycle)
+- [[vol-agent-server-crate]]: task handler emits string ids; session handler emits `metadata`
 - React frontend: `TaskEntry.id: string`, `agent.submit` type corrected
 - Dioxus mirror (`vol-llm-ui`, deprecated): string ids, prefix removed
 

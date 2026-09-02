@@ -10,7 +10,7 @@ source_count: 1
 # Session-Task Binding
 
 **Category:** Agent session ↔ task association
-**Related:** [[session-as-ssot]], [[run-context]], [[vol-session]], [[vol-llm-task]]
+**Related:** [[session-as-ssot]], [[run-context]], [[vol-session]], [[vol-llm-task-crate]]
 
 ## Definition
 
@@ -88,4 +88,4 @@ assert_eq!(store.calls(), vec!["append_session_metadata_values"]);
 - [[run-context]]: `RunContext.task_ids` is the attachment point for future context-injection and tool-scoping
 - [[lenient-serde-zero-migration]]: the pattern that kept old task rows loading
 - [[vol-session]]: owns the `SessionEntryStore` trait and all three backend implementations
-- [[vol-llm-agent]]: `run_input` is the write point; `AgentInput.task_ids` is the wire entry point
+- [[vol-llm-agent-crate]]: `run_input` is the write point; `AgentInput.task_ids` is the wire entry point

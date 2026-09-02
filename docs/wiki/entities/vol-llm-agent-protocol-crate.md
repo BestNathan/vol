@@ -10,7 +10,7 @@ source_count: 21
 # vol-llm-agent-channel Crate
 
 **Category:** Rust crate — Agent communication channel layer
-**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]], [[agentinput-multimodal-run]], [[agentinput-channel-unification]], [[task-database-store-implementation]], [[runtime-task-store-configuration]], [[task-4-quality-issues-cleanup]], [[vol-llm-task]]
+**Related:** [[vol-llm-agent-crate]], [[react-pattern]], [[connection-trait]], [[connection-holder]], [[agent-dispatcher]], [[http-transport]], [[remote-agent-connection]], [[jsonrpc-transport]], [[agent-router]], [[task-5-jsonrpc-integration-tests]], [[jsonrpc-transport-refactoring]], [[vol-mcp-servers-crate]], [[vol-llm-ui-crate]], [[agentinput-multimodal-run]], [[agentinput-channel-unification]], [[task-database-store-implementation]], [[runtime-task-store-configuration]], [[task-4-quality-issues-cleanup]], [[vol-llm-task-crate]]
 
 ## Overview
 
