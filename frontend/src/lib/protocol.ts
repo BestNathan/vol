@@ -81,7 +81,15 @@ export interface AgentEvent {
 // Task 1.4's JsonRpcClient resolves RPC results by these envelope keys.
 export interface RpcMethods {
   'agent.submit': {
-    params: { input: string; target?: string }
+    params: {
+      input: {
+        run_id?: string
+        parts: Array<{ type: 'text'; text: string } | { type: 'image_url'; url: string }>
+        metadata?: Record<string, unknown>
+        task_ids?: string[]
+      }
+      target?: string
+    }
     result: {
       run_id: string
       accepted: boolean
