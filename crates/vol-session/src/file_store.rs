@@ -115,6 +115,43 @@ impl FileSessionEntryStore {
         fs::create_dir_all(self.session_dir())
     }
 
+    /// Publish a full metadata map as the session's sidecar.
+    ///
+    /// Callers must hold [`Self::meta_write_lock`] across the read that
+    /// produced `metadata` and this write — otherwise the read-modify-write is
+    /// not serialized even among writers sharing this store instance.
+    ///
+    /// Writes to a per-write temp file, then renames over the sidecar.
+    ///
+    /// Guarantees: a reader never observes a torn or half-written sidecar,
+    /// because `rename` is atomic and the temp name is unique to this call, so
+    /// no other writer can truncate the bytes this rename publishes.
+    ///
+    /// Does NOT guarantee: serialization between separate store instances or
+    /// between processes. Two such writers can still interleave
+    /// read-modify-write and lose a key — the surviving file is always valid,
+    /// but it may be missing a concurrent writer's key.
+    fn write_metadata(
+        &self,
+        session_id: &str,
+        metadata: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<()> {
+        self.ensure_dir()?;
+        let path = self.meta_path(session_id);
+        let tmp = self.meta_tmp_path(session_id);
+        let encoded = serde_json::to_string(metadata)
+            .map_err(|e| StoreError::Serialization(e.to_string()))?;
+
+        std::fs::write(&tmp, encoded)?;
+        if let Err(e) = std::fs::rename(&tmp, &path) {
+            // The temp name is never reused, so a failed write would otherwise
+            // leak a file into the session directory.
+            let _ = std::fs::remove_file(&tmp);
+            return Err(StoreError::Io(e));
+        }
+        Ok(())
+    }
+
     fn append_line(&self, session_id: &str, line: &str) -> std::io::Result<()> {
         self.ensure_dir()?;
         let file_path = self.file_path(session_id);
@@ -444,30 +481,40 @@ impl SessionEntryStore for FileSessionEntryStore {
             merged.insert(k, v);
         }
 
-        self.ensure_dir()?;
-        let path = self.meta_path(session_id);
-        let tmp = self.meta_tmp_path(session_id);
-        let encoded =
-            serde_json::to_string(&merged).map_err(|e| StoreError::Serialization(e.to_string()))?;
+        self.write_metadata(session_id, &merged)
+    }
 
-        // Write to a per-writer temp file, then rename over the sidecar.
-        //
-        // Guarantees: a reader never observes a torn or half-written sidecar,
-        // because `rename` is atomic and the temp name is unique to this call,
-        // so no other writer can truncate the bytes this rename publishes.
-        //
-        // Does NOT guarantee: serialization between separate store instances
-        // or between processes. Two such writers can still interleave
-        // read-modify-write and lose a key — the surviving file is always
-        // valid, but it may be missing a concurrent writer's key.
-        std::fs::write(&tmp, encoded)?;
-        if let Err(e) = std::fs::rename(&tmp, &path) {
-            // The temp name is never reused, so a failed write would otherwise
-            // leak a file into the session directory.
-            let _ = std::fs::remove_file(&tmp);
-            return Err(StoreError::Io(e));
+    async fn append_session_metadata_values(
+        &self,
+        session_id: &str,
+        key: &str,
+        values: &[String],
+    ) -> Result<()> {
+        if values.is_empty() {
+            return Ok(());
         }
-        Ok(())
+
+        // The lock is held across read, union, and write, so no other writer
+        // *sharing this store instance* can slip a value in between.
+        //
+        // Residual limitation, deliberately not papered over: `meta_write_lock`
+        // is per-instance, `FileSessionManager::entry_store_for_agent` mints a
+        // fresh store on every call, and other processes share nothing at all.
+        // Two writers holding separate stores can still interleave and lose a
+        // value. What is guaranteed even then is that the sidecar stays valid
+        // JSON — unique temp name plus atomic rename, see
+        // [`Self::meta_tmp_path`] — so the failure mode is a missing value, not
+        // a wiped binding set. Closing the gap needs an OS file lock or a
+        // process-wide lock registry keyed by sidecar path; the database
+        // backend is the option that gets this right today.
+        let _guard = self.meta_write_lock.lock().await;
+
+        let mut merged = self.get_session_metadata(session_id).await?;
+        if !crate::store::union_metadata_values(&mut merged, key, values)? {
+            return Ok(());
+        }
+
+        self.write_metadata(session_id, &merged)
     }
 }
 
@@ -1069,5 +1116,165 @@ mod tests {
         store.save(sample_entry("s1")).await.expect("save");
         store.delete_session("s1").await.expect("delete");
         store.delete_session("never-existed").await.expect("delete");
+    }
+
+    #[tokio::test]
+    async fn test_file_append_values_unions_across_calls() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into(), "2".into()])
+            .await
+            .expect("first");
+        store
+            .append_session_metadata_values("s1", "task_ids", &["2".into(), "3".into()])
+            .await
+            .expect("second");
+
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["task_ids"],
+            serde_json::json!(["1", "2", "3"])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_file_append_values_creates_the_sidecar_before_any_entry() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+
+        store
+            .append_session_metadata_values("fresh", "task_ids", &["1".into()])
+            .await
+            .expect("append");
+
+        assert!(dir.path().join("agent-a").join("fresh.meta.json").exists());
+        // And no jsonl was fabricated, so the session stays invisible in lists.
+        assert!(store.list_sessions().expect("list").is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_file_append_values_empty_writes_no_sidecar() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+
+        store
+            .append_session_metadata_values("s1", "task_ids", &[])
+            .await
+            .expect("append");
+
+        assert!(!dir.path().join("agent-a").join("s1.meta.json").exists());
+    }
+
+    #[tokio::test]
+    async fn test_file_append_values_rejects_a_non_array_value() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+
+        let mut patch = serde_json::Map::new();
+        patch.insert("task_ids".into(), serde_json::json!(7));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("seed");
+
+        assert!(matches!(
+            store
+                .append_session_metadata_values("s1", "task_ids", &["1".into()])
+                .await,
+            Err(StoreError::InvalidInput(_))
+        ));
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["task_ids"],
+            serde_json::json!(7)
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_file_append_values_that_change_nothing_leave_the_sidecar_alone() {
+        // Every write publishes a fresh temp file with `rename`, so a write that
+        // did happen necessarily changes the inode. Comparing inodes is exact,
+        // where comparing mtimes would pass vacuously on a coarse-granularity
+        // filesystem.
+        use std::os::unix::fs::MetadataExt;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+        let sidecar = dir.path().join("agent-a").join("s1.meta.json");
+
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into()])
+            .await
+            .expect("first");
+        let before = std::fs::metadata(&sidecar).expect("stat").ino();
+
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into()])
+            .await
+            .expect("idempotent");
+
+        let after = std::fs::metadata(&sidecar).expect("stat").ino();
+        assert_eq!(before, after, "an unchanged union must skip the write");
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["task_ids"],
+            serde_json::json!(["1"])
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_file_concurrent_appends_through_one_store_never_lose_a_value() {
+        // meta_write_lock is held across read, union, and write, so writers
+        // sharing this store instance are serialized and every value survives.
+        // Writers holding separately constructed stores are NOT covered — see
+        // test_concurrent_merges_across_stores_never_corrupt_sidecar and the
+        // note on append_session_metadata_values.
+        const WRITERS: usize = 16;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = std::sync::Arc::new(FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        ));
+        let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(WRITERS));
+
+        let mut handles = Vec::new();
+        for idx in 0..WRITERS {
+            let store = store.clone();
+            let barrier = barrier.clone();
+            handles.push(tokio::spawn(async move {
+                barrier.wait().await;
+                store
+                    .append_session_metadata_values("s1", "task_ids", &[idx.to_string()])
+                    .await
+            }));
+        }
+        for handle in handles {
+            handle.await.expect("join").expect("append");
+        }
+
+        let stored = store.get_session_metadata("s1").await.expect("get");
+        let array = stored["task_ids"].as_array().expect("array");
+        assert_eq!(array.len(), WRITERS, "a concurrent append lost a value");
+        for idx in 0..WRITERS {
+            assert!(
+                array.iter().any(|v| v.as_str() == Some(&idx.to_string())),
+                "value {idx} was lost"
+            );
+        }
     }
 }

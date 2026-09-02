@@ -258,6 +258,87 @@ impl DatabaseSessionEntryStore {
 
         Ok(session)
     }
+
+    /// Read-modify-write the metadata column inside a single transaction.
+    ///
+    /// `apply` runs after the session row is upserted and the ownership guard
+    /// has passed, and reports whether it changed anything — when it did not,
+    /// the UPDATE is skipped. Because the read and the write share one
+    /// transaction, a concurrent mutation cannot land between them, which is
+    /// what makes [`SessionEntryStore::append_session_metadata_values`] atomic
+    /// on this backend.
+    ///
+    /// An error from `apply` drops the transaction, rolling back the upsert too,
+    /// so a rejected mutation leaves no phantom session row behind.
+    async fn mutate_session_metadata<F>(&self, session_id: &str, apply: F) -> Result<()>
+    where
+        F: FnOnce(&mut serde_json::Map<String, serde_json::Value>) -> Result<bool> + Send,
+    {
+        use sea_orm::{
+            sea_query::OnConflict, ActiveValue, ColumnTrait, EntityTrait, QueryFilter,
+            TransactionTrait,
+        };
+
+        let txn = self.db.begin().await.map_err(|e| {
+            StoreError::Database(format!("failed to begin session metadata transaction: {e}"))
+        })?;
+
+        let now = current_timestamp();
+
+        // Upsert: the session row may not exist yet — a binding can be written
+        // before the first entry is ever saved.
+        entity::sessions::Entity::insert(entity::sessions::ActiveModel {
+            id: ActiveValue::Set(session_id.to_string()),
+            agent_id: ActiveValue::Set(self.agent_id.clone()),
+            created_at: ActiveValue::Set(now),
+            updated_at: ActiveValue::Set(now),
+            entry_count: ActiveValue::Set(0),
+            metadata: ActiveValue::Set("{}".to_string()),
+        })
+        .on_conflict(
+            OnConflict::column(entity::sessions::Column::Id)
+                .do_nothing()
+                .to_owned(),
+        )
+        .exec_without_returning(&txn)
+        .await
+        .map_err(|e| StoreError::Database(format!("failed to ensure session row: {e}")))?;
+
+        // Ownership guard — inside the transaction, after the row exists.
+        let session = self.load_owned_session(&txn, session_id).await?;
+
+        let mut merged: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(&session.metadata).unwrap_or_default();
+        if !apply(&mut merged)? {
+            txn.commit().await.map_err(|e| {
+                StoreError::Database(format!(
+                    "failed to commit session metadata transaction: {e}"
+                ))
+            })?;
+            return Ok(());
+        }
+
+        let encoded =
+            serde_json::to_string(&merged).map_err(|e| StoreError::Serialization(e.to_string()))?;
+
+        entity::sessions::Entity::update_many()
+            .col_expr(
+                entity::sessions::Column::Metadata,
+                sea_orm::sea_query::Expr::value(encoded),
+            )
+            .filter(entity::sessions::Column::Id.eq(session_id.to_string()))
+            .filter(entity::sessions::Column::AgentId.eq(self.agent_id.clone()))
+            .exec(&txn)
+            .await
+            .map_err(|e| StoreError::Database(format!("failed to write session metadata: {e}")))?;
+
+        txn.commit().await.map_err(|e| {
+            StoreError::Database(format!(
+                "failed to commit session metadata transaction: {e}"
+            ))
+        })?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -421,64 +502,32 @@ impl SessionEntryStore for DatabaseSessionEntryStore {
         session_id: &str,
         patch: serde_json::Map<String, serde_json::Value>,
     ) -> Result<()> {
-        use sea_orm::{
-            sea_query::OnConflict, ActiveValue, ColumnTrait, EntityTrait, QueryFilter,
-            TransactionTrait,
-        };
-
-        let txn = self.db.begin().await.map_err(|e| {
-            StoreError::Database(format!("failed to begin session metadata transaction: {e}"))
-        })?;
-
-        let now = current_timestamp();
-
-        // Upsert: the session row may not exist yet — a binding can be written
-        // before the first entry is ever saved.
-        entity::sessions::Entity::insert(entity::sessions::ActiveModel {
-            id: ActiveValue::Set(session_id.to_string()),
-            agent_id: ActiveValue::Set(self.agent_id.clone()),
-            created_at: ActiveValue::Set(now),
-            updated_at: ActiveValue::Set(now),
-            entry_count: ActiveValue::Set(0),
-            metadata: ActiveValue::Set("{}".to_string()),
+        self.mutate_session_metadata(session_id, move |merged| {
+            for (k, v) in patch {
+                merged.insert(k, v);
+            }
+            Ok(true)
         })
-        .on_conflict(
-            OnConflict::column(entity::sessions::Column::Id)
-                .do_nothing()
-                .to_owned(),
-        )
-        .exec_without_returning(&txn)
         .await
-        .map_err(|e| StoreError::Database(format!("failed to ensure session row: {e}")))?;
+    }
 
-        // Ownership guard — inside the transaction, after the row exists.
-        let session = self.load_owned_session(&txn, session_id).await?;
-
-        let mut merged: serde_json::Map<String, serde_json::Value> =
-            serde_json::from_str(&session.metadata).unwrap_or_default();
-        for (k, v) in patch {
-            merged.insert(k, v);
+    async fn append_session_metadata_values(
+        &self,
+        session_id: &str,
+        key: &str,
+        values: &[String],
+    ) -> Result<()> {
+        if values.is_empty() {
+            return Ok(());
         }
-        let encoded =
-            serde_json::to_string(&merged).map_err(|e| StoreError::Serialization(e.to_string()))?;
 
-        entity::sessions::Entity::update_many()
-            .col_expr(
-                entity::sessions::Column::Metadata,
-                sea_orm::sea_query::Expr::value(encoded),
-            )
-            .filter(entity::sessions::Column::Id.eq(session_id.to_string()))
-            .filter(entity::sessions::Column::AgentId.eq(self.agent_id.clone()))
-            .exec(&txn)
-            .await
-            .map_err(|e| StoreError::Database(format!("failed to write session metadata: {e}")))?;
-
-        txn.commit().await.map_err(|e| {
-            StoreError::Database(format!(
-                "failed to commit session metadata transaction: {e}"
-            ))
-        })?;
-        Ok(())
+        // The union runs inside `mutate_session_metadata`'s transaction,
+        // between the row read and the row write, so a concurrent append cannot
+        // land in between and be overwritten.
+        self.mutate_session_metadata(session_id, move |merged| {
+            crate::store::union_metadata_values(merged, key, values)
+        })
+        .await
     }
 }
 
@@ -778,6 +827,206 @@ mod tests {
             .await
             .expect("get")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_database_append_values_unions_across_calls() {
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("agent-a");
+
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into(), "2".into()])
+            .await
+            .expect("first");
+        store
+            .append_session_metadata_values("s1", "task_ids", &["2".into(), "3".into()])
+            .await
+            .expect("second");
+
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["task_ids"],
+            serde_json::json!(["1", "2", "3"])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_database_append_values_upserts_before_first_entry() {
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("agent-a");
+
+        store
+            .append_session_metadata_values("fresh", "task_ids", &["1".into()])
+            .await
+            .expect("append");
+
+        assert_eq!(
+            store.get_session_metadata("fresh").await.expect("get")["task_ids"],
+            serde_json::json!(["1"])
+        );
+        // Still a metadata-only session: no phantom entry in the user's list.
+        assert!(manager
+            .list_sessions(Some("agent-a"))
+            .await
+            .expect("list")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_database_append_values_empty_writes_nothing() {
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("agent-a");
+
+        store
+            .append_session_metadata_values("s1", "task_ids", &[])
+            .await
+            .expect("append");
+
+        // Not even the session row was created.
+        assert!(!manager
+            .session_exists(Some("agent-a"), "s1")
+            .await
+            .expect("exists"));
+    }
+
+    #[tokio::test]
+    async fn test_database_append_values_rejects_a_non_array_value() {
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("agent-a");
+        let mut patch = serde_json::Map::new();
+        patch.insert("task_ids".into(), serde_json::json!(7));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("seed");
+
+        assert!(matches!(
+            store
+                .append_session_metadata_values("s1", "task_ids", &["1".into()])
+                .await,
+            Err(StoreError::InvalidInput(_))
+        ));
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["task_ids"],
+            serde_json::json!(7)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_database_append_values_respects_agent_scope() {
+        // The ownership guard runs inside the transaction, after the row upsert,
+        // so a rejected append must leave neither metadata nor a re-owned row.
+        let (_temp, manager) = sqlite_manager().await;
+        let owner = manager.entry_store_for_agent("agent-a");
+        owner
+            .save(test_entry("s1", "entry-1", 10))
+            .await
+            .expect("owner creates session");
+
+        let intruder = manager.entry_store_for_agent("agent-b");
+        assert!(matches!(
+            intruder
+                .append_session_metadata_values("s1", "task_ids", &["1".into()])
+                .await,
+            Err(StoreError::SessionAgentScopeConflict { .. })
+        ));
+
+        assert_eq!(
+            manager
+                .resolve_session_agent(None, "s1")
+                .await
+                .expect("resolve"),
+            "agent-a"
+        );
+        assert!(owner
+            .get_session_metadata("s1")
+            .await
+            .expect("owner get")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_database_append_values_survives_a_later_entry_save() {
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("agent-a");
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into()])
+            .await
+            .expect("append");
+
+        store
+            .save(test_entry("s1", "entry-1", 10))
+            .await
+            .expect("save entry");
+
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["task_ids"],
+            serde_json::json!(["1"])
+        );
+    }
+
+    /// Append one value, retrying SQLite's BUSY.
+    ///
+    /// SQLite serializes writers with a database-level lock, so genuinely
+    /// parallel write transactions can come back with
+    /// `(code: 5) database is locked`. That is a loud, retryable failure — the
+    /// caller knows the append did not happen — which is categorically
+    /// different from the silent value loss these tests hunt for, so it is
+    /// retried rather than treated as a defect.
+    async fn append_retrying_busy(
+        store: &Arc<dyn SessionEntryStore>,
+        session_id: &str,
+        value: &str,
+    ) -> Result<()> {
+        for attempt in 0..40_u32 {
+            match store
+                .append_session_metadata_values(session_id, "task_ids", &[value.to_string()])
+                .await
+            {
+                Err(StoreError::Database(msg)) if msg.contains("database is locked") => {
+                    tokio::time::sleep(std::time::Duration::from_millis(
+                        u64::from(attempt + 1) * 10,
+                    ))
+                    .await;
+                }
+                other => return other,
+            }
+        }
+        Err(StoreError::Database(format!(
+            "session {session_id} stayed locked across every retry"
+        )))
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_database_concurrent_appends_never_lose_a_value() {
+        // The union runs between the read and the write of one transaction, so
+        // concurrent appends serialize instead of overwriting each other.
+        const WRITERS: usize = 4;
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("agent-a");
+        let barrier = Arc::new(tokio::sync::Barrier::new(WRITERS));
+
+        let mut handles = Vec::new();
+        for idx in 0..WRITERS {
+            let store = Arc::clone(&store);
+            let barrier = Arc::clone(&barrier);
+            handles.push(tokio::spawn(async move {
+                barrier.wait().await;
+                append_retrying_busy(&store, "s1", &idx.to_string()).await
+            }));
+        }
+        for handle in handles {
+            handle.await.expect("join").expect("append");
+        }
+
+        let stored = store.get_session_metadata("s1").await.expect("get");
+        let array = stored["task_ids"].as_array().expect("array");
+        assert_eq!(array.len(), WRITERS, "a concurrent append lost a value");
+        for idx in 0..WRITERS {
+            assert!(
+                array.iter().any(|v| v.as_str() == Some(&idx.to_string())),
+                "value {idx} was lost"
+            );
+        }
     }
 
     #[tokio::test]

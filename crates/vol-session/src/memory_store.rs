@@ -279,6 +279,26 @@ impl crate::store::SessionEntryStore for InMemoryEntryStore {
         }
         Ok(())
     }
+
+    async fn append_session_metadata_values(
+        &self,
+        session_id: &str,
+        key: &str,
+        values: &[String],
+    ) -> crate::store::Result<()> {
+        if values.is_empty() {
+            return Ok(());
+        }
+
+        // One write lock held across read, union, and write — that is the whole
+        // atomicity guarantee. Splitting this into `get_session_metadata` plus
+        // `merge_session_metadata` would release the lock between the two and
+        // let a concurrent append be overwritten.
+        let mut metadata = self.session_metadata.write().await;
+        let entry = metadata.entry(session_id.to_string()).or_default();
+        crate::store::union_metadata_values(entry, key, values)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -546,6 +566,111 @@ mod entry_tests {
 
         let meta = store.get_session_metadata("s1").await.expect("get");
         assert_eq!(meta["task_ids"], serde_json::json!(["1", "2"]));
+    }
+
+    #[tokio::test]
+    async fn test_append_values_creates_the_key_for_an_unknown_session() {
+        let store = InMemoryEntryStore::new();
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into()])
+            .await
+            .expect("append");
+
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["task_ids"],
+            serde_json::json!(["1"])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_append_values_unions_across_calls() {
+        let store = InMemoryEntryStore::new();
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into(), "2".into()])
+            .await
+            .expect("first");
+        store
+            .append_session_metadata_values("s1", "task_ids", &["2".into(), "3".into()])
+            .await
+            .expect("second");
+
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["task_ids"],
+            serde_json::json!(["1", "2", "3"])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_append_values_empty_writes_nothing() {
+        let store = InMemoryEntryStore::new();
+        store
+            .append_session_metadata_values("s1", "task_ids", &[])
+            .await
+            .expect("append");
+
+        assert!(store
+            .get_session_metadata("s1")
+            .await
+            .expect("get")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_append_values_rejects_a_non_array_value() {
+        let store = InMemoryEntryStore::new();
+        let mut patch = serde_json::Map::new();
+        patch.insert("task_ids".into(), serde_json::json!("oops"));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("seed");
+
+        assert!(matches!(
+            store
+                .append_session_metadata_values("s1", "task_ids", &["1".into()])
+                .await,
+            Err(crate::store::StoreError::InvalidInput(_))
+        ));
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["task_ids"],
+            serde_json::json!("oops")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_append_values_leaves_other_metadata_keys_alone() {
+        let store = InMemoryEntryStore::new();
+        let mut patch = serde_json::Map::new();
+        patch.insert("project_id".into(), serde_json::json!("p1"));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("seed");
+
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into()])
+            .await
+            .expect("append");
+
+        let meta = store.get_session_metadata("s1").await.expect("get");
+        assert_eq!(meta["project_id"], serde_json::json!("p1"));
+        assert_eq!(meta["task_ids"], serde_json::json!(["1"]));
+    }
+
+    #[tokio::test]
+    async fn test_delete_session_clears_appended_values_too() {
+        let store = InMemoryEntryStore::new();
+        store
+            .append_session_metadata_values("s1", "task_ids", &["1".into()])
+            .await
+            .expect("append");
+        store.delete_session("s1").await.expect("delete");
+
+        assert!(store
+            .get_session_metadata("s1")
+            .await
+            .expect("get")
+            .is_empty());
     }
 }
 

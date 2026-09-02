@@ -7,6 +7,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use vol_llm_core::Message;
 
+/// Session metadata key holding the bound task ids, as an array of canonical id
+/// strings.
+///
+/// Companion to [`crate::RUN_ID_KEY`], which is per-message; this one is
+/// per-session.
+pub const TASK_IDS_KEY: &str = "task_ids";
+
 /// Session management
 pub struct Session {
     pub id: String,
@@ -140,9 +147,86 @@ impl Session {
         Ok(messages)
     }
 
-    /// Add metadata (no-op, kept for backward compatibility during transition).
-    pub fn with_metadata(self, _key: &str, _value: &str) -> Self {
-        self
+    /// Read all session-level metadata.
+    ///
+    /// A session with no metadata — or no entries at all — reads as an empty
+    /// map; absence is not an error.
+    pub async fn metadata(&self) -> Result<serde_json::Map<String, serde_json::Value>> {
+        self.entry_store.get_session_metadata(&self.id).await
+    }
+
+    /// Shallow-merge a patch into session-level metadata.
+    ///
+    /// Keys in `patch` replace existing keys wholesale; other keys are left
+    /// alone. This is the general-purpose path for scalar metadata.
+    ///
+    /// Do NOT use it to accumulate values inside an array. The read you would
+    /// need first releases the backend's lock before this write takes it, so a
+    /// concurrent writer's addition is silently overwritten — see
+    /// `test_read_then_merge_loses_a_concurrent_bind`. Use
+    /// [`Self::bind_task_ids`], or add another atomic store operation alongside
+    /// `append_session_metadata_values`.
+    pub async fn merge_metadata(
+        &self,
+        patch: serde_json::Map<String, serde_json::Value>,
+    ) -> Result<()> {
+        self.entry_store
+            .merge_session_metadata(&self.id, patch)
+            .await
+    }
+
+    /// Task ids bound to this session, ascending.
+    ///
+    /// Numeric ids sort numerically, so `1, 2, 10` — never `1, 10, 2`.
+    /// Non-numeric ids sort after every numeric one, lexicographically among
+    /// themselves, keeping the order total and deterministic. Ordering is a
+    /// read-side presentation choice: the stored array preserves bind order.
+    ///
+    /// A missing key, a non-array value, or non-string elements read as empty
+    /// or are skipped rather than failing — a session must stay readable even
+    /// if a foreign writer put something unexpected there.
+    pub async fn task_ids(&self) -> Result<Vec<String>> {
+        let mut ids: Vec<String> = self
+            .metadata()
+            .await?
+            .get(TASK_IDS_KEY)
+            .and_then(serde_json::Value::as_array)
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        ids.sort_by(|a, b| {
+            let ka = a.parse::<u64>().unwrap_or(u64::MAX);
+            let kb = b.parse::<u64>().unwrap_or(u64::MAX);
+            ka.cmp(&kb).then_with(|| a.cmp(b))
+        });
+        ids.dedup();
+        Ok(ids)
+    }
+
+    /// Add task ids to this session's binding.
+    ///
+    /// Union semantics: the set only grows. There is no unbind, and binding the
+    /// same id twice is a no-op. Ids are not validated against any task store —
+    /// the session layer has none and must not acquire one. An empty slice is a
+    /// no-op that writes nothing.
+    ///
+    /// One store call, not read-then-write: the union happens inside the
+    /// backend's own lock or transaction
+    /// ([`crate::SessionEntryStore::append_session_metadata_values`]), so two
+    /// concurrent binds cannot lose an id. The file backend serializes only
+    /// writers sharing one store instance — see
+    /// [`crate::FileSessionEntryStore`] for that residual limitation.
+    ///
+    /// Fails with `StoreError::InvalidInput` if the `task_ids` key already
+    /// holds a non-array value, rather than clobbering it.
+    pub async fn bind_task_ids(&self, ids: &[String]) -> Result<()> {
+        self.entry_store
+            .append_session_metadata_values(&self.id, TASK_IDS_KEY, ids)
+            .await
     }
 }
 
@@ -181,16 +265,6 @@ mod tests {
 
         let messages = session.get_messages().await.unwrap();
         assert_eq!(messages.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_session_with_metadata_noop() {
-        let entry_store = Arc::new(InMemoryEntryStore::new());
-        let session = Session::new(entry_store).with_metadata("user_id", "user-123");
-
-        // with_metadata is a no-op now, session should still work
-        let messages = session.get_messages().await.unwrap();
-        assert!(messages.is_empty());
     }
 
     #[tokio::test]
@@ -351,5 +425,219 @@ mod tests {
 
         let messages = session.get_messages().await.unwrap();
         assert_eq!(messages.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_bind_task_ids_then_read_back() {
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        session
+            .bind_task_ids(&["1".to_string(), "2".to_string()])
+            .await
+            .expect("bind");
+        assert_eq!(session.task_ids().await.expect("read"), vec!["1", "2"]);
+    }
+
+    #[tokio::test]
+    async fn test_bind_task_ids_unions_across_calls() {
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        session
+            .bind_task_ids(&["1".into(), "2".into()])
+            .await
+            .expect("first");
+        session
+            .bind_task_ids(&["2".into(), "3".into()])
+            .await
+            .expect("second");
+
+        // Union, not replacement; no duplicates.
+        assert_eq!(session.task_ids().await.expect("read"), vec!["1", "2", "3"]);
+    }
+
+    #[tokio::test]
+    async fn test_bind_task_ids_is_idempotent() {
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        session.bind_task_ids(&["7".into()]).await.expect("first");
+        session.bind_task_ids(&["7".into()]).await.expect("second");
+        assert_eq!(session.task_ids().await.expect("read"), vec!["7"]);
+    }
+
+    #[tokio::test]
+    async fn test_bind_task_ids_sorts_numerically_not_lexicographically() {
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        session
+            .bind_task_ids(&["10".into(), "2".into(), "1".into()])
+            .await
+            .expect("bind");
+        assert_eq!(
+            session.task_ids().await.expect("read"),
+            vec!["1", "2", "10"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_task_ids_orders_non_numeric_ids_last_and_deterministically() {
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        session
+            .bind_task_ids(&["zeta".into(), "10".into(), "alpha".into(), "2".into()])
+            .await
+            .expect("bind");
+        assert_eq!(
+            session.task_ids().await.expect("read"),
+            vec!["2", "10", "alpha", "zeta"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_task_ids_empty_when_never_bound() {
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        assert!(session.task_ids().await.expect("read").is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_bind_nonexistent_task_id_succeeds() {
+        // No validation: the session layer has no TaskStore and should not
+        // acquire one for a metadata write.
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        session
+            .bind_task_ids(&["999999".into()])
+            .await
+            .expect("bind");
+        assert_eq!(session.task_ids().await.expect("read"), vec!["999999"]);
+    }
+
+    #[tokio::test]
+    async fn test_bind_empty_slice_is_a_noop() {
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        session.bind_task_ids(&[]).await.expect("bind");
+        assert!(session.task_ids().await.expect("read").is_empty());
+        // Not even an empty array key was created.
+        assert!(session.metadata().await.expect("meta").is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_merge_metadata_leaves_task_ids_alone() {
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        session.bind_task_ids(&["1".into()]).await.expect("bind");
+
+        let mut patch = serde_json::Map::new();
+        patch.insert("project_id".into(), serde_json::json!("p1"));
+        session.merge_metadata(patch).await.expect("merge");
+
+        assert_eq!(session.task_ids().await.expect("read"), vec!["1"]);
+        assert_eq!(
+            session.metadata().await.expect("meta")["project_id"],
+            serde_json::json!("p1")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_task_ids_ignores_a_non_array_value() {
+        // A foreign writer could put anything there; reads degrade to empty
+        // rather than failing the session.
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        let mut patch = serde_json::Map::new();
+        patch.insert(TASK_IDS_KEY.into(), serde_json::json!("not-an-array"));
+        session.merge_metadata(patch).await.expect("merge");
+
+        assert!(session.task_ids().await.expect("read").is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_bind_task_ids_refuses_to_clobber_a_non_array_value() {
+        // Writes are stricter than reads: overwriting whatever is there would
+        // destroy data we cannot interpret.
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        let mut patch = serde_json::Map::new();
+        patch.insert(TASK_IDS_KEY.into(), serde_json::json!(42));
+        session.merge_metadata(patch).await.expect("merge");
+
+        assert!(matches!(
+            session.bind_task_ids(&["1".into()]).await,
+            Err(crate::store::StoreError::InvalidInput(_))
+        ));
+        // The unreadable value survives.
+        assert_eq!(
+            session.metadata().await.expect("meta")[TASK_IDS_KEY],
+            serde_json::json!(42)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_bind_task_ids_preserves_unrelated_metadata_keys() {
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        let mut patch = serde_json::Map::new();
+        patch.insert("project_id".into(), serde_json::json!("p1"));
+        session.merge_metadata(patch).await.expect("merge");
+
+        session.bind_task_ids(&["1".into()]).await.expect("bind");
+
+        let meta = session.metadata().await.expect("meta");
+        assert_eq!(meta["project_id"], serde_json::json!("p1"));
+        assert_eq!(meta[TASK_IDS_KEY], serde_json::json!(["1"]));
+    }
+
+    #[tokio::test]
+    async fn test_read_then_merge_loses_a_concurrent_bind() {
+        // Why bind_task_ids must not be implemented as
+        // metadata() + union + merge_metadata(): the read releases the
+        // backend's lock before the write takes it, so anything bound in
+        // between is overwritten. This is the deterministic form of the race —
+        // it pins the hazard that the atomic append exists to avoid, and keeps
+        // the doc comments on merge_metadata honest.
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        session.bind_task_ids(&["1".into()]).await.expect("bind 1");
+
+        // Reader A reads [1] ...
+        let stale = session.task_ids().await.expect("stale read");
+        // ... writer B binds 2 ...
+        session.bind_task_ids(&["2".into()]).await.expect("bind 2");
+        // ... A writes back its own union of the stale value.
+        let mut union = stale;
+        union.push("3".into());
+        let mut patch = serde_json::Map::new();
+        patch.insert(TASK_IDS_KEY.into(), serde_json::json!(union));
+        session.merge_metadata(patch).await.expect("merge");
+
+        assert_eq!(
+            session.task_ids().await.expect("read"),
+            vec!["1", "3"],
+            "the read-then-merge path drops id 2 — bind_task_ids must not use it"
+        );
+
+        // The atomic path, given the same interleaving, cannot lose anything.
+        session.bind_task_ids(&["2".into()]).await.expect("rebind");
+        assert_eq!(session.task_ids().await.expect("read"), vec!["1", "2", "3"]);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_concurrent_binds_never_lose_an_id() {
+        // 32 tasks, each binding a distinct id, all released together so their
+        // read-modify-write windows overlap as much as possible. Every id must
+        // survive: the union happens inside the store's write lock.
+        //
+        // Not a deterministic reproducer — an uncontended tokio RwLock acquire
+        // completes without yielding, so a get-then-merge implementation is not
+        // *guaranteed* to interleave here. `test_read_then_merge_loses_a_concurrent_bind`
+        // is the deterministic pin; this is the end-to-end guard.
+        const WRITERS: usize = 32;
+        let session = Session::new(Arc::new(InMemoryEntryStore::new()));
+        let barrier = Arc::new(tokio::sync::Barrier::new(WRITERS));
+
+        let mut handles = Vec::new();
+        for idx in 0..WRITERS {
+            let session = session.clone();
+            let barrier = barrier.clone();
+            handles.push(tokio::spawn(async move {
+                barrier.wait().await;
+                session.bind_task_ids(&[idx.to_string()]).await
+            }));
+        }
+        for handle in handles {
+            handle.await.expect("join").expect("bind");
+        }
+
+        let bound = session.task_ids().await.expect("read");
+        let expected: Vec<String> = (0..WRITERS).map(|i| i.to_string()).collect();
+        assert_eq!(bound, expected, "a concurrent bind lost an id");
     }
 }
