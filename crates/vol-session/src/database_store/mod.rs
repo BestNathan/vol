@@ -491,8 +491,15 @@ impl SessionManager for DatabaseSessionManager {
     async fn list_sessions(&self, agent_id: Option<&str>) -> Result<Vec<SessionInfo>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 
-        let mut query =
-            entity::sessions::Entity::find().order_by_desc(entity::sessions::Column::UpdatedAt);
+        let mut query = entity::sessions::Entity::find()
+            // A metadata-only session — a binding written before the first
+            // entry — must not surface as an empty session at the top of the
+            // list. The file backend already requires a .jsonl holding at
+            // least one parseable entry; this keeps both backends in
+            // agreement. `session_exists` deliberately still sees the row, so
+            // the binding is never orphaned.
+            .filter(entity::sessions::Column::EntryCount.gt(0))
+            .order_by_desc(entity::sessions::Column::UpdatedAt);
         if let Some(agent_id) = agent_id {
             query = query.filter(entity::sessions::Column::AgentId.eq(agent_id.to_string()));
         }
@@ -596,6 +603,56 @@ mod tests {
         let url = format!("sqlite://{}", temp.path().join("sessions.db").display());
         let manager = DatabaseSessionManager::connect(&url).await.unwrap();
         (temp, manager)
+    }
+
+    #[tokio::test]
+    async fn test_database_metadata_only_session_is_not_listed() {
+        // Mirror of file_store's test_list_sessions_ignores_sidecar_files: a
+        // binding written before the first entry must not appear as a phantom
+        // empty session at the top of the user's list.
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("agent-a");
+        let mut patch = serde_json::Map::new();
+        patch.insert("k".into(), serde_json::json!("v"));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("merge");
+
+        assert!(manager
+            .list_sessions(Some("agent-a"))
+            .await
+            .expect("list")
+            .is_empty());
+        assert!(manager
+            .list_sessions(None)
+            .await
+            .expect("list all")
+            .is_empty());
+
+        // But the row still exists, so the binding is not orphaned, and the
+        // metadata is still readable.
+        assert!(manager
+            .session_exists(Some("agent-a"), "s1")
+            .await
+            .expect("exists"));
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["k"],
+            serde_json::json!("v")
+        );
+
+        // Once a real entry lands the session becomes visible, metadata intact.
+        store
+            .save(test_entry("s1", "entry-1", 10))
+            .await
+            .expect("save");
+        let sessions = manager.list_sessions(Some("agent-a")).await.expect("list");
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].id, "s1");
+        assert_eq!(
+            store.get_session_metadata("s1").await.expect("get")["k"],
+            serde_json::json!("v")
+        );
     }
 
     #[tokio::test]

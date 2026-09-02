@@ -15,9 +15,13 @@ use std::path::{Path, PathBuf};
 pub struct FileSessionEntryStore {
     entry_dir: PathBuf,
     agent_type: Option<String>,
-    /// Serializes read-modify-write cycles on the metadata sidecar.
+    /// Serializes metadata sidecar read-modify-write cycles that share *this*
+    /// store instance. It is not a cross-instance or cross-process lock.
     meta_write_lock: tokio::sync::Mutex<()>,
 }
+
+/// Process-local discriminator for temp sidecar file names.
+static META_TMP_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// JSONL line format for SessionEntry.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -85,11 +89,26 @@ impl FileSessionEntryStore {
         self.session_dir().join(format!("{session_id}.meta.json"))
     }
 
-    /// Temp path for the atomic sidecar replacement, alongside the sidecar so
-    /// the rename never crosses a filesystem boundary.
+    /// Temp path for a *single* sidecar write, alongside the sidecar so the
+    /// rename never crosses a filesystem boundary.
+    ///
+    /// Returns a fresh, unique name on every call — process id plus a
+    /// process-local counter. A deterministic name would let two concurrent
+    /// writers alias one temp file, because [`Self::meta_write_lock`] only
+    /// serializes writers sharing this store instance and
+    /// `FileSessionManager` mints a new store per call. `std::fs::write`
+    /// truncates, so writer B rewriting the shared temp file between writer
+    /// A's write and A's rename would make A publish overlapping bytes as the
+    /// sidecar; unparseable metadata degrades to an empty map, silently
+    /// dropping every accumulated binding for that session.
+    ///
+    /// The `.tmp` extension also keeps these files out of `list_sessions`,
+    /// which matches only `jsonl`.
     fn meta_tmp_path(&self, session_id: &str) -> PathBuf {
+        let seq = META_TMP_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let pid = std::process::id();
         self.session_dir()
-            .join(format!("{session_id}.meta.json.tmp"))
+            .join(format!("{session_id}.meta.json.{pid}.{seq}.tmp"))
     }
 
     fn ensure_dir(&self) -> std::io::Result<()> {
@@ -416,8 +435,8 @@ impl SessionEntryStore for FileSessionEntryStore {
         session_id: &str,
         patch: serde_json::Map<String, serde_json::Value>,
     ) -> Result<()> {
-        // The mutex covers in-process concurrency only; sessions are
-        // single-writer in practice.
+        // Serializes writers that share this store instance only — not writers
+        // holding a separately constructed store, and not other processes.
         let _guard = self.meta_write_lock.lock().await;
 
         let mut merged = self.get_session_metadata(session_id).await?;
@@ -431,10 +450,23 @@ impl SessionEntryStore for FileSessionEntryStore {
         let encoded =
             serde_json::to_string(&merged).map_err(|e| StoreError::Serialization(e.to_string()))?;
 
-        // Temp file plus rename: a crash mid-write cannot leave a half-written
-        // sidecar behind.
+        // Write to a per-writer temp file, then rename over the sidecar.
+        //
+        // Guarantees: a reader never observes a torn or half-written sidecar,
+        // because `rename` is atomic and the temp name is unique to this call,
+        // so no other writer can truncate the bytes this rename publishes.
+        //
+        // Does NOT guarantee: serialization between separate store instances
+        // or between processes. Two such writers can still interleave
+        // read-modify-write and lose a key — the surviving file is always
+        // valid, but it may be missing a concurrent writer's key.
         std::fs::write(&tmp, encoded)?;
-        std::fs::rename(&tmp, &path)?;
+        if let Err(e) = std::fs::rename(&tmp, &path) {
+            // The temp name is never reused, so a failed write would otherwise
+            // leak a file into the session directory.
+            let _ = std::fs::remove_file(&tmp);
+            return Err(StoreError::Io(e));
+        }
         Ok(())
     }
 }
@@ -765,6 +797,95 @@ mod tests {
             store.meta_path("a.b"),
             dir.path().join("agent-a").join("a.b.meta.json")
         );
+    }
+
+    #[test]
+    fn test_meta_tmp_path_is_unique_per_call() {
+        // A deterministic temp name lets two writers that share no
+        // meta_write_lock alias one file; std::fs::write truncates, so one
+        // writer's rename could publish another's partial bytes.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+
+        let first = store.meta_tmp_path("s1");
+        let second = store.meta_tmp_path("s1");
+        assert_ne!(
+            first, second,
+            "two writes through one store must not share a temp path"
+        );
+
+        // A separately constructed store shares no lock, so it must not
+        // collide either.
+        let other = FileSessionEntryStore::with_agent_type(
+            dir.path().to_path_buf(),
+            Some("agent-a".into()),
+        );
+        assert_ne!(
+            store.meta_tmp_path("s1"),
+            other.meta_tmp_path("s1"),
+            "separate store instances must not share a temp path"
+        );
+
+        // Still beside the sidecar (so rename stays within one filesystem) and
+        // still invisible to list_sessions, which matches only "jsonl".
+        let session_dir = dir.path().join("agent-a");
+        assert_eq!(first.parent(), Some(session_dir.as_path()));
+        assert_eq!(first.extension().and_then(|e| e.to_str()), Some("tmp"));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_concurrent_merges_across_stores_never_corrupt_sidecar() {
+        // meta_write_lock is per-instance and FileSessionManager mints a new
+        // store per call, so these writers share no lock. A key may
+        // legitimately be lost to the caller-level read-modify-write race, but
+        // the sidecar must never become unparseable: get_session_metadata
+        // degrades malformed content to an empty map, which would silently
+        // erase every accumulated binding for the session.
+        //
+        // This is an end-to-end guard, not a deterministic reproducer: nothing
+        // yields between the temp write and the rename, so the aliasing window
+        // is narrow and this test also passed against the shared-temp-name bug.
+        // `test_meta_tmp_path_is_unique_per_call` is the deterministic pin on
+        // the invariant that makes the corruption impossible.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path().to_path_buf();
+
+        let writers = (0..16).map(|idx| {
+            let root = root.clone();
+            tokio::spawn(async move {
+                // Separately constructed: no shared meta_write_lock.
+                let store = FileSessionEntryStore::with_agent_type(root, Some("agent-a".into()));
+                let mut patch = serde_json::Map::new();
+                // A payload large enough that an interleaved truncate-rewrite
+                // leaves detectable overlapping bytes.
+                patch.insert(format!("key-{idx}"), serde_json::json!("x".repeat(8192)));
+                store.merge_session_metadata("s1", patch).await
+            })
+        });
+        for writer in writers {
+            writer.await.expect("join").expect("merge");
+        }
+
+        let session_dir = root.join("agent-a");
+        let raw = std::fs::read_to_string(session_dir.join("s1.meta.json")).expect("read sidecar");
+        let parsed: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(&raw).expect("sidecar must remain valid JSON");
+        assert!(
+            !parsed.is_empty(),
+            "the winning writer's key must have survived"
+        );
+
+        // Every temp file was renamed away; none leaked.
+        let leftover: Vec<_> = std::fs::read_dir(&session_dir)
+            .expect("read_dir")
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("tmp"))
+            .collect();
+        assert!(leftover.is_empty(), "leftover temp files: {leftover:?}");
     }
 
     #[tokio::test]
