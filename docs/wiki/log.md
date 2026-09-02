@@ -1,7 +1,7 @@
 # Change Log
 
 ## [2026-09-02] feat | pre-commit wiki-link validation
-- New script: `scripts/check-wiki-links.sh` — scans staged wiki files for broken `[[slug]]` references and relative markdown links; output names the closest matching slug so the fix is one edit (designed for AI self-fix). Strips inline code spans so documentation describing the wiki-link syntax does not trigger false positives.
+- New script: `scripts/check-wiki-links.sh` — scans staged wiki files for broken wiki-link references (double-bracket slugs that do not resolve to any wiki page) and relative markdown links; output names the closest matching slug so the fix is one edit (designed for AI self-fix). Strips inline code spans so documentation describing wiki-link syntax does not trigger false positives.
 - Pre-commit: `docs/wiki/` changes now run `check-wiki-links.sh`; `just` is no longer required for wiki-only commits
 - `detect-changes.sh`: added `WIKI_CHANGED` flag
 - `CLAUDE.md`: Guardrails entry documenting the wiki-link rule
