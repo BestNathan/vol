@@ -248,6 +248,9 @@ impl crate::store::SessionEntryStore for InMemoryEntryStore {
 
     async fn delete_session(&self, session_id: &str) -> crate::store::Result<()> {
         self.entries.write().await.remove(session_id);
+        // Drop metadata too, or it resurrects onto a later session that reuses
+        // this id — and the map would otherwise grow without bound.
+        self.session_metadata.write().await.remove(session_id);
         Ok(())
     }
 
@@ -440,8 +443,9 @@ mod entry_tests {
     }
 
     #[tokio::test]
-    async fn test_metadata_merge_upserts_without_any_entries() {
-        // Binding can happen before the first message is written.
+    async fn test_metadata_survives_a_later_first_entry_save() {
+        // A binding can be written before the session's first message. Saving
+        // that first entry must not clobber metadata already recorded.
         let store = InMemoryEntryStore::new();
         let mut patch = serde_json::Map::new();
         patch.insert("k".into(), serde_json::json!("v"));
@@ -451,9 +455,74 @@ mod entry_tests {
             .await
             .expect("merge");
 
+        store
+            .save(SessionEntry::from_message(SessionMessage::new(
+                "brand-new".to_string(),
+                Message::user("first message, written after the binding"),
+            )))
+            .await
+            .expect("save");
+
+        assert_eq!(store.get_count("brand-new").await.expect("count"), 1);
         assert_eq!(
             store.get_session_metadata("brand-new").await.expect("get")["k"],
             serde_json::json!("v")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_session_also_clears_metadata() {
+        let store = InMemoryEntryStore::new();
+        let mut patch = serde_json::Map::new();
+        patch.insert("task_ids".into(), serde_json::json!(["1"]));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("merge");
+        store
+            .save(SessionEntry::from_message(SessionMessage::new(
+                "s1".to_string(),
+                Message::user("hello"),
+            )))
+            .await
+            .expect("save");
+
+        store.delete_session("s1").await.expect("delete");
+
+        // A reused session id must not resurrect the old binding.
+        assert!(store
+            .get_session_metadata("s1")
+            .await
+            .expect("get")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_delete_session_leaves_other_sessions_metadata_alone() {
+        let store = InMemoryEntryStore::new();
+        let mut a = serde_json::Map::new();
+        a.insert("k".into(), serde_json::json!("a"));
+        store
+            .merge_session_metadata("s-a", a)
+            .await
+            .expect("merge a");
+        let mut b = serde_json::Map::new();
+        b.insert("k".into(), serde_json::json!("b"));
+        store
+            .merge_session_metadata("s-b", b)
+            .await
+            .expect("merge b");
+
+        store.delete_session("s-a").await.expect("delete");
+
+        assert!(store
+            .get_session_metadata("s-a")
+            .await
+            .expect("get a")
+            .is_empty());
+        assert_eq!(
+            store.get_session_metadata("s-b").await.expect("get b")["k"],
+            serde_json::json!("b")
         );
     }
 
