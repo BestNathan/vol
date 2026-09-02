@@ -68,6 +68,9 @@ pub fn session_model_to_info(model: sessions::Model) -> SessionInfo {
         },
         created_at: model.created_at,
         updated_at: Some(model.updated_at),
+        // A malformed metadata column degrades to an empty map — losing
+        // unreadable metadata is better than failing the list.
+        metadata: serde_json::from_str(&model.metadata).unwrap_or_default(),
     }
 }
 
@@ -114,5 +117,32 @@ mod tests {
     fn rejects_unknown_entry_type() {
         let err = entry_type_from_db("bogus").unwrap_err();
         assert!(err.to_string().contains("unknown session entry type"));
+    }
+
+    #[test]
+    fn test_session_model_to_info_carries_metadata() {
+        let model = sessions::Model {
+            id: "s1".into(),
+            agent_id: "agent-a".into(),
+            created_at: 0,
+            updated_at: 1,
+            entry_count: 3,
+            metadata: r#"{"task_ids":["1","2"]}"#.into(),
+        };
+        let info = session_model_to_info(model);
+        assert_eq!(info.metadata["task_ids"], serde_json::json!(["1", "2"]));
+    }
+
+    #[test]
+    fn test_session_model_to_info_tolerates_malformed_metadata() {
+        let model = sessions::Model {
+            id: "s1".into(),
+            agent_id: "agent-a".into(),
+            created_at: 0,
+            updated_at: 1,
+            entry_count: 0,
+            metadata: "{ truncated".into(),
+        };
+        assert!(session_model_to_info(model).metadata.is_empty());
     }
 }

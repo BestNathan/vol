@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use crate::file_store::FileSessionEntryStore;
 use crate::store::{Result as StoreResult, SessionEntryStore, StoreError};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SessionInfo {
     pub id: String,
     pub agent_id: String,
@@ -16,6 +16,9 @@ pub struct SessionInfo {
     pub entry_count: usize,
     pub created_at: i64,
     pub updated_at: Option<i64>,
+    /// Session-level metadata, including `task_ids`. Empty when the backend
+    /// has none recorded.
+    pub metadata: serde_json::Map<String, serde_json::Value>,
 }
 
 #[async_trait]
@@ -177,6 +180,16 @@ impl SessionManager for FileSessionManager {
         for agent_id in agent_ids {
             let store = self.file_store(&agent_id);
             for summary in store.list_sessions().map_err(StoreError::Io)? {
+                // Populate metadata from the sidecar. The list path already
+                // opens each session's `.jsonl` for line counting, so one
+                // extra `read_to_string` for the `.meta.json` is marginal.
+                // This keeps the file backend consistent with the database
+                // backend — callers see populated metadata regardless of
+                // which store is in use.
+                let metadata = match store.get_session_metadata(&summary.session_id).await {
+                    Ok(meta) => meta,
+                    Err(_) => serde_json::Map::new(),
+                };
                 sessions.push(SessionInfo {
                     id: summary.session_id.clone(),
                     agent_id: agent_id.clone(),
@@ -184,6 +197,7 @@ impl SessionManager for FileSessionManager {
                     entry_count: summary.entry_count,
                     created_at: summary.created_at,
                     updated_at: None,
+                    metadata,
                 });
             }
         }
