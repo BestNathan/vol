@@ -131,6 +131,18 @@ impl DatabaseBackend {
     }
 }
 
+/// Current wall-clock time as epoch seconds.
+///
+/// Mirrors the pattern used by `Session::with_id`; a pre-epoch clock degrades
+/// to `0` rather than panicking.
+fn current_timestamp() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|elapsed| i64::try_from(elapsed.as_secs()).ok())
+        .unwrap_or(0)
+}
+
 #[derive(Clone)]
 pub struct DatabaseSessionManager {
     pub(crate) db: DatabaseConnection,
@@ -390,21 +402,83 @@ impl SessionEntryStore for DatabaseSessionEntryStore {
 
     async fn get_session_metadata(
         &self,
-        _session_id: &str,
+        session_id: &str,
     ) -> Result<serde_json::Map<String, serde_json::Value>> {
-        Err(StoreError::Internal(
-            "session metadata not yet implemented for the database backend".to_string(),
-        ))
+        match self.load_owned_session(&self.db, session_id).await {
+            // A malformed metadata column degrades to an empty map rather than
+            // failing the read: losing unreadable metadata beats making a
+            // session unopenable.
+            Ok(session) => Ok(serde_json::from_str(&session.metadata).unwrap_or_default()),
+            // An unknown session has no metadata; that is not an error. A
+            // scope conflict is, and must propagate.
+            Err(StoreError::NotFound(_)) => Ok(serde_json::Map::new()),
+            Err(e) => Err(e),
+        }
     }
 
     async fn merge_session_metadata(
         &self,
-        _session_id: &str,
-        _patch: serde_json::Map<String, serde_json::Value>,
+        session_id: &str,
+        patch: serde_json::Map<String, serde_json::Value>,
     ) -> Result<()> {
-        Err(StoreError::Internal(
-            "session metadata not yet implemented for the database backend".to_string(),
-        ))
+        use sea_orm::{
+            sea_query::OnConflict, ActiveValue, ColumnTrait, EntityTrait, QueryFilter,
+            TransactionTrait,
+        };
+
+        let txn = self.db.begin().await.map_err(|e| {
+            StoreError::Database(format!("failed to begin session metadata transaction: {e}"))
+        })?;
+
+        let now = current_timestamp();
+
+        // Upsert: the session row may not exist yet — a binding can be written
+        // before the first entry is ever saved.
+        entity::sessions::Entity::insert(entity::sessions::ActiveModel {
+            id: ActiveValue::Set(session_id.to_string()),
+            agent_id: ActiveValue::Set(self.agent_id.clone()),
+            created_at: ActiveValue::Set(now),
+            updated_at: ActiveValue::Set(now),
+            entry_count: ActiveValue::Set(0),
+            metadata: ActiveValue::Set("{}".to_string()),
+        })
+        .on_conflict(
+            OnConflict::column(entity::sessions::Column::Id)
+                .do_nothing()
+                .to_owned(),
+        )
+        .exec_without_returning(&txn)
+        .await
+        .map_err(|e| StoreError::Database(format!("failed to ensure session row: {e}")))?;
+
+        // Ownership guard — inside the transaction, after the row exists.
+        let session = self.load_owned_session(&txn, session_id).await?;
+
+        let mut merged: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(&session.metadata).unwrap_or_default();
+        for (k, v) in patch {
+            merged.insert(k, v);
+        }
+        let encoded =
+            serde_json::to_string(&merged).map_err(|e| StoreError::Serialization(e.to_string()))?;
+
+        entity::sessions::Entity::update_many()
+            .col_expr(
+                entity::sessions::Column::Metadata,
+                sea_orm::sea_query::Expr::value(encoded),
+            )
+            .filter(entity::sessions::Column::Id.eq(session_id.to_string()))
+            .filter(entity::sessions::Column::AgentId.eq(self.agent_id.clone()))
+            .exec(&txn)
+            .await
+            .map_err(|e| StoreError::Database(format!("failed to write session metadata: {e}")))?;
+
+        txn.commit().await.map_err(|e| {
+            StoreError::Database(format!(
+                "failed to commit session metadata transaction: {e}"
+            ))
+        })?;
+        Ok(())
     }
 }
 
@@ -525,16 +599,158 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_metadata_not_yet_implemented() {
-        // Replaced with real behaviour in a later task. This test exists so
-        // an unimplemented backend fails loudly rather than silently.
+    async fn test_database_metadata_round_trip() {
         let (_temp, manager) = sqlite_manager().await;
-        let store = manager.entry_store_for_agent("alpha");
-        assert!(store.get_session_metadata("s1").await.is_err());
-        assert!(store
-            .merge_session_metadata("s1", serde_json::Map::new())
+        let store = manager.entry_store_for_agent("agent-a");
+        let mut patch = serde_json::Map::new();
+        patch.insert("task_ids".into(), serde_json::json!(["1", "2"]));
+
+        store
+            .merge_session_metadata("s1", patch)
             .await
-            .is_err());
+            .expect("merge");
+
+        let meta = store.get_session_metadata("s1").await.expect("get");
+        assert_eq!(meta["task_ids"], serde_json::json!(["1", "2"]));
+    }
+
+    #[tokio::test]
+    async fn test_database_metadata_upserts_before_first_entry() {
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("agent-a");
+        let mut patch = serde_json::Map::new();
+        patch.insert("k".into(), serde_json::json!("v"));
+
+        // No entry has ever been saved for this session.
+        store
+            .merge_session_metadata("fresh", patch)
+            .await
+            .expect("merge");
+
+        assert_eq!(
+            store.get_session_metadata("fresh").await.expect("get")["k"],
+            serde_json::json!("v")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_database_metadata_merge_is_shallow() {
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("agent-a");
+
+        let mut first = serde_json::Map::new();
+        first.insert("a".into(), serde_json::json!(1));
+        first.insert("task_ids".into(), serde_json::json!(["1"]));
+        store
+            .merge_session_metadata("s1", first)
+            .await
+            .expect("first");
+
+        let mut second = serde_json::Map::new();
+        second.insert("task_ids".into(), serde_json::json!(["1", "2"]));
+        store
+            .merge_session_metadata("s1", second)
+            .await
+            .expect("second");
+
+        let meta = store.get_session_metadata("s1").await.expect("get");
+        assert_eq!(meta["a"], serde_json::json!(1));
+        assert_eq!(meta["task_ids"], serde_json::json!(["1", "2"]));
+    }
+
+    #[tokio::test]
+    async fn test_database_metadata_survives_later_entry_save() {
+        // ensure_session_for_entry writes metadata: "{}" with
+        // OnConflict::do_nothing. It must not clobber an earlier write.
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("agent-a");
+        let mut patch = serde_json::Map::new();
+        patch.insert("task_ids".into(), serde_json::json!(["1"]));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("merge");
+
+        store
+            .save(test_entry("s1", "entry-1", 10))
+            .await
+            .expect("save entry");
+
+        let meta = store.get_session_metadata("s1").await.expect("get");
+        assert_eq!(meta["task_ids"], serde_json::json!(["1"]));
+    }
+
+    #[tokio::test]
+    async fn test_database_metadata_respects_agent_scope() {
+        // Metadata must not become a way around load_owned_session.
+        let (_temp, manager) = sqlite_manager().await;
+        let owner = manager.entry_store_for_agent("agent-a");
+        let intruder = manager.entry_store_for_agent("agent-b");
+
+        owner
+            .save(test_entry("s1", "entry-1", 10))
+            .await
+            .expect("owner creates session");
+
+        let mut patch = serde_json::Map::new();
+        patch.insert("k".into(), serde_json::json!("v"));
+
+        assert!(matches!(
+            intruder.merge_session_metadata("s1", patch).await,
+            Err(StoreError::SessionAgentScopeConflict { .. })
+        ));
+        assert!(matches!(
+            intruder.get_session_metadata("s1").await,
+            Err(StoreError::SessionAgentScopeConflict { .. })
+        ));
+
+        // The intruder's failed merge must not have written anything.
+        assert!(owner
+            .get_session_metadata("s1")
+            .await
+            .expect("owner get")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_database_metadata_unknown_session_is_empty() {
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("agent-a");
+        assert!(store
+            .get_session_metadata("never-existed")
+            .await
+            .expect("get")
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_database_metadata_malformed_column_degrades_to_empty() {
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+        let (_temp, manager) = sqlite_manager().await;
+        let store = manager.entry_store_for_agent("agent-a");
+        let mut patch = serde_json::Map::new();
+        patch.insert("k".into(), serde_json::json!("v"));
+        store
+            .merge_session_metadata("s1", patch)
+            .await
+            .expect("merge");
+
+        entity::sessions::Entity::update_many()
+            .col_expr(
+                entity::sessions::Column::Metadata,
+                sea_orm::sea_query::Expr::value("{ truncated".to_string()),
+            )
+            .filter(entity::sessions::Column::Id.eq("s1"))
+            .exec(&manager.db)
+            .await
+            .expect("corrupt metadata");
+
+        assert!(store
+            .get_session_metadata("s1")
+            .await
+            .expect("get")
+            .is_empty());
     }
 
     #[tokio::test]
